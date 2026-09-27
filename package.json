@@ -1,0 +1,37 @@
+{
+    "name": "moneyflow",
+    "version": "1.0.0",
+    "description": "Privacy-first offline personal finance tracker with SQLite WASM + OPFS",
+    "type": "module",
+    "scripts": {
+        "dev": "vite",
+        "build": "vite build",
+        "preview": "vite preview"
+    },
+    "keywords": [
+        "finance",
+        "tracker",
+        "offline",
+        "pwa",
+        "sqlite",
+        "wasm",
+        "opfs"
+    ],
+    "author": "MoneyFlow",
+    "license": "MIT",
+    "devDependencies": {
+        "@types/node": "^20.11.5",
+        "autoprefixer": "^10.4.24",
+        "postcss": "^8.5.6",
+        "tailwindcss": "^3.4.1",
+        "typescript": "^5.3.3",
+        "vite": "^5.0.11"
+    },
+    "dependencies": {
+        "chart.js": "^4.4.1",
+        "date-fns": "^3.3.1",
+        "papaparse": "^5.4.1",
+        "sql.js": "^1.10.3",
+        "zod": "^3.22.4"
+    }
+}

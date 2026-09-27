@@ -1,0 +1,37 @@
+{
+    "compilerOptions": {
+        "target": "ES2022",
+        "module": "ES2022",
+        "lib": [
+            "ES2022",
+            "DOM",
+            "DOM.Iterable",
+            "WebWorker"
+        ],
+        "moduleResolution": "bundler",
+        "strict": true,
+        "noUnusedLocals": false,
+        "noUnusedParameters": false,
+        "esModuleInterop": true,
+        "skipLibCheck": true,
+        "forceConsistentCasingInFileNames": true,
+        "resolveJsonModule": true,
+        "allowSyntheticDefaultImports": true,
+        "outDir": "./dist",
+        "rootDir": "./src",
+        "sourceMap": true,
+        "declaration": false,
+        "noImplicitReturns": true,
+        "noFallthroughCasesInSwitch": true,
+        "types": [
+            "node"
+        ]
+    },
+    "include": [
+        "src/**/*"
+    ],
+    "exclude": [
+        "node_modules",
+        "dist"
+    ]
+}
