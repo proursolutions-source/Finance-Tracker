@@ -1,0 +1,11 @@
+# MoneyFlow is a private, single-user finance tracker. The app itself is a
+# client-rendered single-page app with no content meant for search results,
+# so we keep crawlers off it and only allow the static informational pages.
+User-agent: *
+Disallow: /#
+Allow: /$
+Allow: /privacy.html
+Allow: /terms.html
+Allow: /guide.html
+
+Sitemap: /sitemap.xml

@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en-IN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="MoneyFlow Feature Guide — what every screen does and how to use it.">
+<meta name="robots" content="noindex">
+<title>Feature Guide — MoneyFlow</title>
+<link rel="icon" type="image/png" sizes="32x32" href="/icons/icon-32x32.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Poppins:wght@500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/lucide@0.462.0/dist/umd/lucide.js" defer></script>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body {
+    background: linear-gradient(160deg, #0b1020, #0f172a 40%, #0b1020);
+    color: #e2e8f0;
+    font-family: 'Inter', -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+    margin: 0;
+  }
+  .wrap { max-width: 880px; margin: 0 auto; padding: 48px 20px 96px; }
+  header.hero { text-align: center; margin-bottom: 40px; }
+  .brand { font-family: 'Poppins', sans-serif; font-weight: 700; font-size: 2rem; }
+  .brand .flow { color: #38bdf8; }
+  .tagline { color: #93c5fd; font-size: 0.85rem; letter-spacing: 0.02em; margin-top: 4px; }
+  h1.title { font-size: 1.6rem; margin: 24px 0 4px; }
+  .subtitle { color: #94a3b8; }
+  .back { display: inline-block; margin-bottom: 24px; color: #38bdf8; text-decoration: none; }
+  .back:hover { text-decoration: underline; }
+  nav.toc { display: flex; flex-wrap: wrap; gap: 8px; margin: 24px 0 40px; }
+  nav.toc a {
+    font-size: 0.8rem; color: #cbd5e1; text-decoration: none;
+    background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.1);
+    border-radius: 999px; padding: 6px 14px;
+  }
+  nav.toc a:hover { background: rgba(56,189,248,.15); border-color: #38bdf8; color: #fff; }
+  section.feature {
+    display: flex; gap: 20px; align-items: flex-start;
+    background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.08);
+    border-radius: 20px; padding: 24px; margin-bottom: 20px;
+    scroll-margin-top: 20px;
+  }
+  .icon-badge {
+    flex-shrink: 0; width: 56px; height: 56px; border-radius: 16px;
+    display: flex; align-items: center; justify-content: center;
+    background: linear-gradient(135deg, #0ea5e9, #38bdf8);
+  }
+  .icon-badge svg { width: 28px; height: 28px; color: #0b1020; }
+  section.feature h2 { margin: 0 0 6px; font-size: 1.15rem; }
+  section.feature p { margin: 0 0 10px; color: #cbd5e1; line-height: 1.6; font-size: 0.95rem; }
+  section.feature ul { margin: 0 0 12px; padding-left: 18px; color: #cbd5e1; font-size: 0.9rem; line-height: 1.6; }
+  section.feature .ref {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 0.85rem; color: #38bdf8; text-decoration: none; font-weight: 600;
+  }
+  section.feature .ref:hover { text-decoration: underline; }
+  .group-title { margin: 48px 0 16px; font-size: 1.3rem; color: #f8fafc; border-bottom: 1px solid rgba(255,255,255,.1); padding-bottom: 8px; }
+  .group-title:first-of-type { margin-top: 0; }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <a class="back" href="/">&larr; Back to MoneyFlow</a>
+
+    <header class="hero">
+      <div class="brand">Money<span class="flow">Flow</span></div>
+      <div class="tagline">TRACK TODAY &middot; A BETTER TOMORROW</div>
+      <h1 class="title">Feature Guide</h1>
+      <p class="subtitle">Everything MoneyFlow can do, in one place. Each "Open" link jumps straight to that screen in the app.</p>
+    </header>
+
+    <nav class="toc">
+      <a href="#dashboard">Dashboard</a>
+      <a href="#transactions">Transactions</a>
+      <a href="#scan">Scan Bill</a>
+      <a href="#split">Split Bill</a>
+      <a href="#categories">Categories</a>
+      <a href="#budgets">Budgets</a>
+      <a href="#reports">Reports</a>
+      <a href="#reminders">Reminders</a>
+      <a href="#goals">Goals</a>
+      <a href="#memory">Memory</a>
+      <a href="#networth">Net Worth</a>
+      <a href="#transfers">Transfers</a>
+      <a href="#recurring">Recurring</a>
+      <a href="#lending">Lending &amp; Debt</a>
+      <a href="#settings">Settings</a>
+      <a href="#security">Login &amp; Security</a>
+      <a href="#tour">Guided Tour</a>
+      <a href="#subscription">Subscription</a>
+      <a href="#admin">Admin Portal</a>
+    </nav>
+
+    <h2 class="group-title">Day to Day</h2>
+
+    <section class="feature" id="dashboard">
+      <div class="icon-badge"><i data-lucide="layout-dashboard"></i></div>
+      <div>
+        <h2>Dashboard</h2>
+        <p>Your financial overview at a glance: total balance across all accounts, this month's income and expense, and your most recent transactions.</p>
+        <a class="ref" href="/#/" target="_blank">Open Dashboard <i data-lucide="arrow-up-right" style="width:14px;height:14px"></i></a>
+      </div>
+    </section>
+
+    <section class="feature" id="transactions">
+      <div class="icon-badge"><i data-lucide="receipt"></i></div>
+      <div>
+        <h2>Transactions</h2>
+        <p>Every income and expense you've logged, with tools to find and manage them:</p>
+        <ul>
+          <li>Search by payee or notes, filter by type, category, or date range</li>
+          <li>Edit or delete any entry &mdash; deleting shows an <strong>Undo</strong> for a few seconds</li>
+          <li>Attach a receipt photo, or link a transaction to a Net Worth account</li>
+        </ul>
+        <a class="ref" href="/#/transactions" target="_blank">Open Transactions <i data-lucide="arrow-up-right" style="width:14px;height:14px"></i></a>
+      </div>
+    </section>
+
+    <section class="feature" id="scan">
+      <div class="icon-badge"><i data-lucide="scan-line"></i></div>
+      <div>
+        <h2>Scan Bill</h2>
+        <p>From the Add Transaction form, tap <strong>Scan</strong> to photograph a paper bill. On-device OCR guesses the total amount and date and fills them in &mdash; always shown as a suggestion to check, never applied silently. The photo itself is also attached as the transaction's receipt.</p>
+        <a class="ref" href="/#/transactions" target="_blank">Try it from Transactions <i data-lucide="arrow-up-right" style="width:14px;height:14px"></i></a>
+      </div>
+    </section>
+
+    <section class="feature" id="split">
+      <div class="icon-badge"><i data-lucide="users"></i></div>
+      <div>
+        <h2>Split Bill</h2>
+        <p>Splitting a bill with other people: your own share is recorded as a normal expense, and everyone else's share is automatically added to the <strong>Lending &amp; Debt</strong> page as money they owe you (or, if someone else paid, as money you owe them).</p>
+        <a class="ref" href="/#/transactions" target="_blank">Open Split Bill <i data-lucide="arrow-up-right" style="width:14px;height:14px"></i></a>
+      </div>
+    </section>
+
+    <section class="feature" id="categories">
+      <div class="icon-badge"><i data-lucide="tag"></i></div>
+      <div>
+        <h2>Categories</h2>
+        <p>Create, edit, or remove income/expense categories with a custom name, icon, and color, beyond the built-in defaults.</p>
+        <a class="ref" href="/#/categories" target="_blank">Open Categories <i data-lucide="arrow-up-right" style="width:14px;height:14px"></i></a>
+      </div>
+    </section>
+
+    <h2 class="group-title">Planning</h2>
+
+    <section class="feature" id="budgets">
+      <div class="icon-badge"><i data-lucide="pie-chart"></i></div>
+      <div>
+        <h2>Budgets</h2>
+        <p>Set a spending limit for a category (weekly, monthly, or yearly) and track actual spend against it with a progress bar that changes color as you approach the limit.</p>
+        <a class="ref" href="/#/budgets" target="_blank">Open Budgets <i data-lucide="arrow-up-right" style="width:14px;height:14px"></i></a>
+      </div>
+    </section>
+
+    <section class="feature" id="reports">
+      <div class="icon-badge"><i data-lucide="bar-chart-3"></i></div>
+      <div>
+        <h2>Reports</h2>
+        <p>Analytics across your whole financial history:</p>
+        <ul>
+          <li><strong>Projection vs Actual</strong> &mdash; combines your budgets and recurring bills into a monthly plan, compared to what you've actually spent so far</li>
+          <li>Income vs expense trend (last 12 months), spending by category, budget adherence, savings rate, and a 3-month forecast</li>
+        </ul>
+        <a class="ref" href="/#/reports" target="_blank">Open Reports <i data-lucide="arrow-up-right" style="width:14px;height:14px"></i></a>
+      </div>
+    </section>
+
+    <section class="feature" id="reminders">
+      <div class="icon-badge"><i data-lucide="bell"></i></div>
+      <div>
+        <h2>Reminders</h2>
+        <p>One-off or recurring bill reminders with an amount and due date. Mark one as paid when you've settled it, and get an optional notification when it's due (see Settings).</p>
+        <a class="ref" href="/#/reminders" target="_blank">Open Reminders <i data-lucide="arrow-up-right" style="width:14px;height:14px"></i></a>
+      </div>
+    </section>
+
+    <section class="feature" id="goals">
+      <div class="icon-badge"><i data-lucide="award"></i></div>
+      <div>
+        <h2>Goals</h2>
+        <p>Set a savings target with a deadline and priority, then log contributions toward it and watch the progress bar fill in.</p>
+        <a class="ref" href="/#/goals" target="_blank">Open Goals <i data-lucide="arrow-up-right" style="width:14px;height:14px"></i></a>
+      </div>
+    </section>
+
+    <section class="feature" id="memory">
+      <div class="icon-badge"><i data-lucide="sparkles"></i></div>
+      <div>
+        <h2>Memory</h2>
+        <p>The story behind your money, not just the numbers:</p>
+        <ul>
+          <li>Attach an optional memory (a title and short story) to any transaction from the Add/Edit Transaction form</li>
+          <li>Financial Milestones (first &#8377;1,000/10,000/50,000/1,00,000 saved, first salary, first investment, first debt cleared) are detected automatically from your transaction history</li>
+          <li><strong>On This Day</strong> surfaces a memory or your spend from the same date in a previous year, on the Dashboard and the Memory page</li>
+          <li>The Memory Timeline combines memories, milestones, and manually-added life events (from before you started using MoneyFlow) into one chronological view</li>
+        </ul>
+        <a class="ref" href="/#/memory" target="_blank">Open Memory <i data-lucide="arrow-up-right" style="width:14px;height:14px"></i></a>
+      </div>
+    </section>
+
+    <h2 class="group-title">Accounts &amp; Debt</h2>
+
+    <section class="feature" id="networth">
+      <div class="icon-badge"><i data-lucide="wallet"></i></div>
+      <div>
+        <h2>Net Worth</h2>
+        <p>Every account you own in one place &mdash; savings, FDs, PPF, mutual funds, stocks, gold, property, credit cards, and loans:</p>
+        <ul>
+          <li>Assets and liabilities are totalled automatically into your net worth, with a trend chart over time</li>
+          <li>Credit cards show a utilization bar against their limit; loans show the EMI amount and next due date</li>
+          <li><strong>Pay Bill</strong> / <strong>Pay EMI</strong> on a card or loan opens a pre-filled transfer from one of your other accounts</li>
+        </ul>
+        <a class="ref" href="/#/networth" target="_blank">Open Net Worth <i data-lucide="arrow-up-right" style="width:14px;height:14px"></i></a>
+      </div>
+    </section>
+
+    <section class="feature" id="transfers">
+      <div class="icon-badge"><i data-lucide="arrow-right-left"></i></div>
+      <div>
+        <h2>Transfers</h2>
+        <p>Move money between two of your own accounts &mdash; e.g. bank to credit card, or bank to loan. Transfers update both balances but are never counted as income or expense, and appear in a Recent Transfers log on the Net Worth page.</p>
+        <a class="ref" href="/#/networth" target="_blank">Open Net Worth <i data-lucide="arrow-up-right" style="width:14px;height:14px"></i></a>
+      </div>
+    </section>
+
+    <section class="feature" id="recurring">
+      <div class="icon-badge"><i data-lucide="refresh-cw"></i></div>
+      <div>
+        <h2>Recurring</h2>
+        <p>Bills and income that repeat on a schedule (daily to yearly) &mdash; rent, salary, subscriptions. <strong>Process Due</strong> turns any that are due into real transactions in one tap.</p>
+        <a class="ref" href="/#/recurring" target="_blank">Open Recurring <i data-lucide="arrow-up-right" style="width:14px;height:14px"></i></a>
+      </div>
+    </section>
+
+    <section class="feature" id="lending">
+      <div class="icon-badge"><i data-lucide="handshake"></i></div>
+      <div>
+        <h2>Lending &amp; Debt</h2>
+        <p>Money you've lent to someone (they owe you) or borrowed (you owe them), tracked per person with partial repayments &mdash; an entry settles itself automatically once fully paid.</p>
+        <a class="ref" href="/#/lending" target="_blank">Open Lending &amp; Debt <i data-lucide="arrow-up-right" style="width:14px;height:14px"></i></a>
+      </div>
+    </section>
+
+    <h2 class="group-title">Account &amp; App</h2>
+
+    <section class="feature" id="settings">
+      <div class="icon-badge"><i data-lucide="settings"></i></div>
+      <div>
+        <h2>Settings</h2>
+        <p>Everything about your profile and your data:</p>
+        <ul>
+          <li>Edit your profile, toggle light/dark theme, log out</li>
+          <li>Turn on notifications for due reminders and budget overspend</li>
+          <li>Set an app PIN lock for quick re-entry on this device</li>
+          <li>Export all your data as CSV or JSON, or import a CSV/JSON backup back in</li>
+          <li>Reset all local data, or manage your cookie/analytics consent</li>
+        </ul>
+        <a class="ref" href="/#/settings" target="_blank">Open Settings <i data-lucide="arrow-up-right" style="width:14px;height:14px"></i></a>
+      </div>
+    </section>
+
+    <section class="feature" id="security">
+      <div class="icon-badge"><i data-lucide="shield-check"></i></div>
+      <div>
+        <h2>Login &amp; Security</h2>
+        <p>MoneyFlow creates a local account on first use (name, email, password) and asks for it again each time you open the app on this device. There is no server and no password recovery &mdash; forgetting your password means resetting the local account. An optional PIN adds a faster second unlock step. Both lock out for 30 seconds after 5 wrong attempts.</p>
+      </div>
+    </section>
+
+    <section class="feature" id="tour">
+      <div class="icon-badge"><i data-lucide="compass"></i></div>
+      <div>
+        <h2>Guided Tour</h2>
+        <p>A short walkthrough of the main sections, shown automatically right after onboarding. You can replay it any time from Settings &rarr; Help &rarr; <strong>Take the Tour</strong>.</p>
+        <a class="ref" href="/#/settings" target="_blank">Open Settings <i data-lucide="arrow-up-right" style="width:14px;height:14px"></i></a>
+      </div>
+    </section>
+
+    <section class="feature" id="subscription">
+      <div class="icon-badge"><i data-lucide="credit-card"></i></div>
+      <div>
+        <h2>Subscription</h2>
+        <p>MoneyFlow's paid plans, managed through a separate MoneyFlow Cloud account (not your local device login). View plans, subscribe, apply a discount code, or cancel. No live payment gateway is connected yet &mdash; subscribing records your intent, and an admin activates it manually in the meantime. Requires a one-time setup by whoever runs this MoneyFlow instance (see SETUP_SUPABASE.md); until then this page explains what's missing instead of failing silently.</p>
+        <a class="ref" href="/#/subscription" target="_blank">Open Subscription <i data-lucide="arrow-up-right" style="width:14px;height:14px"></i></a>
+      </div>
+    </section>
+
+    <section class="feature" id="admin">
+      <div class="icon-badge"><i data-lucide="shield"></i></div>
+      <div>
+        <h2>Admin Portal</h2>
+        <p>Visible only when signed in to a MoneyFlow Cloud account with the admin email &mdash; the link doesn't even appear in the sidebar otherwise, and every action is also checked server-side, not just hidden client-side:</p>
+        <ul>
+          <li><strong>Dashboard</strong>: total users, active/pending subscriptions, estimated monthly recurring revenue</li>
+          <li><strong>Users</strong>: suspend/activate accounts, change a user's plan, and manually activate a subscription until a live payment gateway is connected</li>
+          <li><strong>Plans</strong>: create, edit, or deactivate subscription plans, pricing, and feature lists</li>
+          <li><strong>Discounts</strong>: create percent/flat discount codes with redemption limits, expiry dates, and plan restrictions</li>
+        </ul>
+        <a class="ref" href="/#/admin" target="_blank">Open Admin Portal <i data-lucide="arrow-up-right" style="width:14px;height:14px"></i></a>
+      </div>
+    </section>
+  </div>
+  <script>
+    window.addEventListener('load', () => { if (window.lucide) window.lucide.createIcons(); });
+    document.addEventListener('DOMContentLoaded', () => { if (window.lucide) window.lucide.createIcons(); });
+  </script>
+</body>
+</html>
