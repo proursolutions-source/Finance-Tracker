@@ -3,7 +3,7 @@
  */
 
 import { db } from '../db';
-import { formatCurrency, getIcon } from '../utils';
+import { formatCurrency, getIcon, escapeHtml } from '../utils';
 import { showToast } from '../components/toast';
 import { showModal } from '../components/modal';
 
@@ -88,7 +88,7 @@ export async function renderGoals(): Promise<void> {
                     ${getIcon(getGoalIcon(g.type), 20)}
                   </div>
                   <div>
-                    <h3 class="font-semibold text-white">${g.name}</h3>
+                    <h3 class="font-semibold text-white">${escapeHtml(g.name)}</h3>
                     <span class="text-xs px-2 py-0.5 rounded-full capitalize" style="background:${color}20;color:${color}">${g.priority} priority</span>
                   </div>
                 </div>
@@ -109,9 +109,9 @@ export async function renderGoals(): Promise<void> {
               </div>
               <div class="flex items-center justify-between text-xs text-gray-500">
                 ${daysLeft !== null ? `<span>${daysLeft} days left</span>` : '<span>No deadline</span>'}
-                <button class="add-funds text-emerald-400 font-medium hover:underline" data-id="${g.id}" data-name="${g.name}">+ Add Funds</button>
+                <button class="add-funds text-emerald-400 font-medium hover:underline" data-id="${g.id}" data-name="${escapeHtml(g.name)}">+ Add Funds</button>
               </div>
-              ${g.notes ? `<p class="text-xs text-gray-500 mt-2 line-clamp-1">${g.notes}</p>` : ''}
+              ${g.notes ? `<p class="text-xs text-gray-500 mt-2 line-clamp-1">${escapeHtml(g.notes)}</p>` : ''}
             </div>`;
   }).join('')}
         </div>
@@ -128,7 +128,7 @@ export async function renderGoals(): Promise<void> {
             <div class="flex items-center gap-3">
               <div class="w-8 h-8 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center">${getIcon('check', 16)}</div>
               <div>
-                <h3 class="font-medium text-white line-through">${g.name}</h3>
+                <h3 class="font-medium text-white line-through">${escapeHtml(g.name)}</h3>
                 <span class="text-xs text-gray-400">${formatCurrency(g.targetAmount)} achieved</span>
               </div>
             </div>
@@ -170,7 +170,7 @@ export async function renderGoals(): Promise<void> {
 async function openAddFundsModal(goalId: string, goalName: string): Promise<void> {
   const html = `
     <div class="space-y-4">
-      <h3 class="text-lg font-semibold text-white">Add Funds to "${goalName}"</h3>
+      <h3 class="text-lg font-semibold text-white">Add Funds to "${escapeHtml(goalName)}"</h3>
       <div>
         <label class="block text-sm text-gray-400 mb-1">Amount (₹)</label>
         <input type="number" id="fund-amount" class="w-full px-4 py-3 rounded-xl bg-white/10 border border-white/20 text-white" placeholder="Enter amount" min="1">
@@ -182,7 +182,7 @@ async function openAddFundsModal(goalId: string, goalName: string): Promise<void
     </div>
   `;
   const closeModal = showModal({
-    title: `Add Funds to "${goalName}"`,
+    title: `Add Funds to "${escapeHtml(goalName)}"`,
     content: html
   });
   document.getElementById('save-funds')?.addEventListener('click', async () => {
@@ -193,10 +193,16 @@ async function openAddFundsModal(goalId: string, goalName: string): Promise<void
     if (!goal) return;
     const newAmount = (goal.currentAmount || 0) + amount;
     const updates: any = { currentAmount: newAmount };
-    if (newAmount >= goal.targetAmount) updates.completed = true;
+    const justCompleted = !goal.completed && newAmount >= goal.targetAmount;
+    if (justCompleted) updates.completed = true;
     await db.updateGoal(goalId, updates);
-    showToast(`₹${amount.toLocaleString('en-IN')} added!`, { type: 'success' });
     closeModal();
+    if (justCompleted) {
+      const { celebrate } = await import('../components/celebration');
+      celebrate(`🎉 Goal "${goal.name}" complete!`);
+    } else {
+      showToast(`₹${amount.toLocaleString('en-IN')} added!`, { type: 'success' });
+    }
     renderGoals();
   });
   document.getElementById('cancel-funds')?.addEventListener('click', () => closeModal());
@@ -209,7 +215,7 @@ async function openGoalModal(existing?: any): Promise<void> {
       <h3 class="text-lg font-semibold text-white">${isEdit ? 'Edit Goal' : 'Create New Goal'}</h3>
       <div>
         <label class="block text-sm text-gray-400 mb-1">Goal Name *</label>
-        <input type="text" id="goal-name" class="w-full px-4 py-3 rounded-xl bg-white/10 border border-white/20 text-white" value="${existing?.name || ''}" placeholder="e.g., Home Down-Payment">
+        <input type="text" id="goal-name" class="w-full px-4 py-3 rounded-xl bg-white/10 border border-white/20 text-white" value="${escapeHtml(existing?.name)}" placeholder="e.g., Home Down-Payment">
       </div>
       <div>
         <label class="block text-sm text-gray-400 mb-1">Goal Type</label>
@@ -237,7 +243,7 @@ async function openGoalModal(existing?: any): Promise<void> {
       </div>
       <div>
         <label class="block text-sm text-gray-400 mb-1">Notes</label>
-        <textarea id="goal-notes" class="w-full px-4 py-3 rounded-xl bg-white/10 border border-white/20 text-white" rows="2" placeholder="Optional notes...">${existing?.notes || ''}</textarea>
+        <textarea id="goal-notes" class="w-full px-4 py-3 rounded-xl bg-white/10 border border-white/20 text-white" rows="2" placeholder="Optional notes...">${escapeHtml(existing?.notes)}</textarea>
       </div>
       <div class="flex gap-3 pt-2">
         <button id="save-goal" class="flex-1 py-3 rounded-xl bg-gradient-to-r from-emerald-600 to-cyan-600 hover:from-emerald-500 hover:to-cyan-500 text-white font-semibold transition-colors">${isEdit ? 'Update' : 'Create'} Goal</button>

@@ -9,7 +9,7 @@ import { db } from '../db';
 import { store } from '../stores';
 import { showToast } from './toast';
 import { showModal } from './modal';
-import { dateInputToISO } from '../utils';
+import { dateInputToISO, escapeHtml } from '../utils';
 
 interface ParticipantRow {
     name: string;
@@ -43,7 +43,7 @@ export function openSplitModal(onSuccess?: () => void): void {
       <label class="block text-sm font-medium mb-1">Category</label>
       <select name="categoryId" required class="glass-input w-full">
         <option value="">Select category...</option>
-        ${categories.map(c => `<option value="${c.id}">${c.name}</option>`).join('')}
+        ${categories.map(c => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('')}
       </select>
     </div>
     <div>
@@ -98,7 +98,7 @@ export function openSplitModal(onSuccess?: () => void): void {
     function renderParticipants(): void {
         participantsList.innerHTML = participants.map((p, i) => `
       <div class="flex gap-2">
-        <input type="text" data-idx="${i}" class="participant-name glass-input flex-1 min-w-0" placeholder="Name" value="${p.name}">
+        <input type="text" data-idx="${i}" class="participant-name glass-input flex-1 min-w-0" placeholder="Name" value="${escapeHtml(p.name)}">
         <input type="number" data-idx="${i}" min="0" step="0.01" class="participant-amount glass-input w-20 sm:w-28 flex-shrink-0" placeholder="0.00" value="${p.amount || ''}">
         <button type="button" data-idx="${i}" class="remove-participant p-2 text-slate-400 hover:text-red-400 flex-shrink-0" aria-label="Remove">✕</button>
       </div>

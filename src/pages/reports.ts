@@ -4,10 +4,13 @@
 
 import { db } from '../db';
 import { store } from '../stores';
-import { formatCurrency, getStartOfMonthISO, getEndOfMonthISO, getIcon } from '../utils';
+import { formatCurrency, formatDate, getStartOfMonthISO, getEndOfMonthISO, getIcon, escapeHtml, dateInputToISO } from '../utils';
 import { createLineChart, createDoughnutChart, createBarChart, getGhostSeriesColors } from '../components/charts';
 import { showToast } from '../components/toast';
 import { hasFeature } from '../cloud/entitlements';
+
+type ReportTab = 'overview' | 'custom';
+let activeReportTab: ReportTab = 'overview';
 
 const MONTHLY_EQUIVALENT: Record<string, number> = {
   daily: 30.44,
@@ -35,11 +38,19 @@ export async function renderReports(): Promise<void> {
       <div class="flex items-center justify-between mb-6">
         <h1 class="text-3xl font-bold">Reports & Analytics</h1>
         <div class="flex gap-2 bg-white/5 p-1 rounded-lg">
-           <button class="px-4 py-1.5 rounded-md bg-primary-500 text-white text-sm font-medium">Overview</button>
-           <button class="px-4 py-1.5 rounded-md hover:bg-white/10 text-slate-400 text-sm font-medium transition-colors">Custom</button>
+           <button data-report-tab="overview" class="report-tab-btn px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${activeReportTab === 'overview' ? 'bg-primary-500 text-white' : 'hover:bg-white/10 text-slate-400'}">Overview</button>
+           <button data-report-tab="custom" class="report-tab-btn px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${activeReportTab === 'custom' ? 'bg-primary-500 text-white' : 'hover:bg-white/10 text-slate-400'}">Custom</button>
         </div>
       </div>
 
+      ${activeReportTab === 'custom' ? (fullReports ? '<div id="custom-report-root"></div>' : `
+        <div class="glass-card p-8 text-center">
+          ${getIcon('lock', 32, 'text-primary-400 mx-auto mb-3')}
+          <h3 class="font-bold mb-1">Unlock Custom Reports</h3>
+          <p class="text-sm text-slate-400 mb-4">Custom date ranges, category filters, and CSV export are Pro features.</p>
+          <a href="#/subscription" class="glass-button inline-flex items-center gap-2">${getIcon('sparkles', 16)} View Plans</a>
+        </div>
+      `) : `
       ${fullReports ? `
       <!-- Projection vs Actual -->
       <div class="glass-card p-6 mb-6">
@@ -118,12 +129,25 @@ export async function renderReports(): Promise<void> {
         </div>
         `}
       </div>
+      `}
     </div>
   `;
 
   // Initialize icons
   if ((window as any).lucide) {
     (window as any).lucide.createIcons();
+  }
+
+  mainContent.querySelectorAll<HTMLButtonElement>('.report-tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      activeReportTab = btn.dataset.reportTab as ReportTab;
+      renderReports();
+    });
+  });
+
+  if (activeReportTab === 'custom') {
+    if (fullReports) renderCustomReport(document.getElementById('custom-report-root')!);
+    return;
   }
 
   try {
@@ -196,7 +220,7 @@ export async function renderReports(): Promise<void> {
         return `
           <div>
             <div class="flex justify-between items-center mb-1 text-sm">
-              <span class="flex items-center gap-2"><i data-lucide="${r.icon}" class="w-4 h-4 text-slate-400"></i> ${r.name}</span>
+              <span class="flex items-center gap-2"><i data-lucide="${escapeHtml(r.icon)}" class="w-4 h-4 text-slate-400"></i> ${escapeHtml(r.name)}</span>
               <span class="text-slate-400">${formatCurrency(r.actual, currency)} <span class="text-slate-500">/ ${formatCurrency(r.planned, currency)}</span></span>
             </div>
             <div class="h-2 w-full bg-slate-700/50 rounded-full overflow-hidden">
@@ -318,4 +342,159 @@ export async function renderReports(): Promise<void> {
     console.error('[Reports] Error loading charts:', error);
     showToast('Failed to load report data', { type: 'error' });
   }
+}
+
+/**
+ * Custom Report — an ad-hoc report over a user-picked date range and
+ * category filter: summary totals, a category breakdown chart, and a CSV
+ * export of the matching transactions. There's no scheduling/saving of
+ * report configs (that would need a place to store them and, for
+ * recurring runs, a server — out of scope for this offline-first app),
+ * but the report itself is fully real and computed live.
+ */
+function renderCustomReport(root: HTMLElement): void {
+  const categories = store.getState().categories;
+  const currency = store.getState().userProfile?.primaryCurrency || 'INR';
+  const today = new Date().toISOString().split('T')[0];
+  const monthStart = getStartOfMonthISO().split('T')[0];
+
+  root.innerHTML = `
+    <div class="glass-card p-6 mb-6">
+      <h3 class="text-lg font-bold mb-4">Build a Custom Report</h3>
+      <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 mb-4">
+        <div>
+          <label class="block text-sm font-medium mb-1">From</label>
+          <input type="date" id="cr-start" value="${monthStart}" class="glass-input w-full">
+        </div>
+        <div>
+          <label class="block text-sm font-medium mb-1">To</label>
+          <input type="date" id="cr-end" value="${today}" class="glass-input w-full">
+        </div>
+        <div>
+          <label class="block text-sm font-medium mb-1">Type</label>
+          <select id="cr-type" class="glass-input w-full">
+            <option value="">Income & Expense</option>
+            <option value="income">Income only</option>
+            <option value="expense">Expense only</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-sm font-medium mb-1">Category</label>
+          <select id="cr-category" class="glass-input w-full">
+            <option value="">All categories</option>
+            ${categories.map(c => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('')}
+          </select>
+        </div>
+      </div>
+      <div class="flex gap-3">
+        <button id="cr-generate" class="glass-button">Generate Report</button>
+        <button id="cr-export-csv" class="glass-button-secondary hidden">Export CSV</button>
+      </div>
+    </div>
+    <div id="cr-results"></div>
+  `;
+
+  let lastRows: any[] = [];
+
+  const generate = async () => {
+    const startDate = dateInputToISO((document.getElementById('cr-start') as HTMLInputElement).value);
+    const endDate = dateInputToISO((document.getElementById('cr-end') as HTMLInputElement).value);
+    const type = (document.getElementById('cr-type') as HTMLSelectElement).value as '' | 'income' | 'expense';
+    const categoryId = (document.getElementById('cr-category') as HTMLSelectElement).value;
+
+    if (new Date(endDate) < new Date(startDate)) {
+      showToast('End date must be on or after the start date', { type: 'error' });
+      return;
+    }
+
+    try {
+      const txns = await db.getTransactions({
+        startDate,
+        endDate,
+        type: type || undefined,
+        categoryIds: categoryId ? [categoryId] : undefined,
+        limit: 5000,
+      });
+      lastRows = txns;
+
+      const income = txns.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0);
+      const expense = txns.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
+
+      const byCategory = new Map<string, number>();
+      txns.filter(t => t.type === 'expense').forEach(t => byCategory.set(t.categoryId, (byCategory.get(t.categoryId) || 0) + t.amount));
+      const catRows = Array.from(byCategory.entries())
+        .map(([id, amt]) => ({ name: categories.find(c => c.id === id)?.name || 'Unknown', amt }))
+        .sort((a, b) => b.amt - a.amt);
+
+      const resultsEl = document.getElementById('cr-results')!;
+      resultsEl.innerHTML = `
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+          <div class="glass-card p-5"><p class="text-xs uppercase text-slate-400 mb-1">Income</p><p class="text-xl font-bold text-green-400">${formatCurrency(income, currency)}</p></div>
+          <div class="glass-card p-5"><p class="text-xs uppercase text-slate-400 mb-1">Expense</p><p class="text-xl font-bold text-red-400">${formatCurrency(expense, currency)}</p></div>
+          <div class="glass-card p-5"><p class="text-xs uppercase text-slate-400 mb-1">Net</p><p class="text-xl font-bold ${income - expense >= 0 ? 'text-green-400' : 'text-red-400'}">${formatCurrency(income - expense, currency)}</p></div>
+        </div>
+        ${catRows.length > 0 ? `
+          <div class="glass-card p-6 mb-6">
+            <h3 class="text-lg font-bold mb-4">Expense by Category</h3>
+            <div class="h-[280px] w-full flex items-center justify-center">
+              <canvas id="cr-category-chart"></canvas>
+            </div>
+          </div>
+        ` : ''}
+        <div class="glass-card overflow-hidden">
+          <table class="w-full text-sm">
+            <thead class="text-left text-slate-400 border-b border-white/10">
+              <tr><th class="p-3">Date</th><th class="p-3">Category</th><th class="p-3">Payee</th><th class="p-3 text-right">Amount</th></tr>
+            </thead>
+            <tbody>
+              ${txns.length === 0 ? '<tr><td colspan="4" class="p-6 text-center text-slate-400">No transactions match this filter.</td></tr>' : txns.map(t => `
+                <tr class="border-b border-white/5 last:border-0">
+                  <td class="p-3 text-slate-400">${formatDate(t.date)}</td>
+                  <td class="p-3">${escapeHtml(categories.find(c => c.id === t.categoryId)?.name || 'Unknown')}</td>
+                  <td class="p-3">${escapeHtml(t.payee) || '—'}</td>
+                  <td class="p-3 text-right ${t.type === 'income' ? 'text-green-400' : 'text-red-400'}">${t.type === 'income' ? '+' : '-'}${formatCurrency(t.amount, currency)}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+      `;
+
+      if (catRows.length > 0) {
+        createDoughnutChart('cr-category-chart', catRows.map(r => r.name), catRows.map(r => r.amt),
+          ['#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#06b6d4']);
+      }
+
+      document.getElementById('cr-export-csv')?.classList.toggle('hidden', txns.length === 0);
+    } catch (error) {
+      console.error('[Custom Report] Error:', error);
+      showToast('Failed to generate report', { type: 'error' });
+    }
+  };
+
+  root.querySelector('#cr-generate')?.addEventListener('click', generate);
+  root.querySelector('#cr-export-csv')?.addEventListener('click', () => {
+    if (lastRows.length === 0) return;
+    const header = ['Date', 'Type', 'Category', 'Payee', 'Amount', 'Notes'];
+    const csvRows = lastRows.map(t => [
+      t.date.slice(0, 10),
+      t.type,
+      categories.find(c => c.id === t.categoryId)?.name || 'Unknown',
+      t.payee || '',
+      String(t.amount),
+      (t.notes || '').replace(/\n/g, ' '),
+    ]);
+    const escapeCsv = (v: string) => /[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v;
+    const csv = [header, ...csvRows].map(row => row.map(escapeCsv).join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `moneyflow-report-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  });
+
+  // Auto-generate once on first open with the default (this month) range.
+  generate();
 }

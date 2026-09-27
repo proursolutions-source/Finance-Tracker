@@ -74,10 +74,32 @@ class Router {
         const route = this.routes.get(path);
 
         if (route) {
+            // Only shows the loader if the page's own render is slow enough to
+            // notice (cloud-backed pages, mostly) — for fast local-data pages
+            // the handler finishes before this fires and it's cancelled,
+            // avoiding a distracting flash on every navigation. Also only
+            // fires while #main-content is still genuinely empty: several
+            // pages synchronously create their own sub-container (e.g. admin
+            // pages' #admin-root) before their async data resolves, and
+            // overwriting #main-content at that point would detach it,
+            // silently breaking the page's own later render into it.
+            const loaderTimer = setTimeout(() => {
+                const mainContent = document.getElementById('main-content');
+                if (mainContent && mainContent.innerHTML.trim() === '') {
+                    import('./components/animated-loader').then(({ renderAnimatedLoader }) => {
+                        if (this.getPath() === path && mainContent.innerHTML.trim() === '') {
+                            renderAnimatedLoader(mainContent);
+                        }
+                    });
+                }
+            }, 150);
+
             try {
                 await route.handler();
             } catch (error) {
                 console.error('[Router] Error handling route:', error);
+            } finally {
+                clearTimeout(loaderTimer);
             }
             return;
         }

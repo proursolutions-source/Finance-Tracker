@@ -46,6 +46,7 @@ export interface CloudSubscription {
     paymentStatus: PaymentStatus;
     notes: string | null;
     paymentReference: string | null;
+    paymentScreenshotPath: string | null;
     createdAt: string;
     updatedAt: string;
     // joined, when fetched with a plan join
@@ -87,6 +88,17 @@ export interface AdminAuditLogEntry {
     adminId: string;
     action: string;
     targetUserId: string | null;
+    details: Record<string, unknown> | null;
+    createdAt: string;
+}
+
+export type AppEventType = 'login_success' | 'login_failed' | 'signup' | 'logout' | 'client_error';
+
+export interface AppEvent {
+    id: string;
+    userId: string | null;
+    eventType: AppEventType;
+    message: string;
     details: Record<string, unknown> | null;
     createdAt: string;
 }

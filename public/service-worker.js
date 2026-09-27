@@ -1,4 +1,4 @@
-const CACHE_NAME = 'moneyflow-v1.0.1';
+const CACHE_NAME = 'moneyflow-v1.0.2';
 const ASSETS_TO_CACHE = [
     '/',
     '/index.html',
@@ -57,6 +57,15 @@ self.addEventListener('fetch', (event) => {
     // different user signed in later on the same device. Let the browser's
     // own network stack handle these untouched.
     if (new URL(request.url).origin !== self.location.origin) return;
+
+    // Never cache Vite's dev-only paths (unhashed source files served
+    // straight from disk, plus its HMR client and dep pre-bundles). Unlike
+    // production's content-hashed /assets/ filenames, these URLs never
+    // change even when the underlying file does -- caching them here served
+    // an edited file's old content indefinitely and was mistaken for the dev
+    // server itself being stale multiple times during development.
+    const path = new URL(request.url).pathname;
+    if (path.startsWith('/src/') || path.startsWith('/@vite/') || path.startsWith('/@react-refresh') || path.startsWith('/node_modules/.vite/')) return;
 
     if (request.mode === 'navigate') {
         event.respondWith(

@@ -11,8 +11,9 @@ import {
     adminSetSubscriptionStatus,
     adminChangeUserPlan,
     listPlans,
+    getPaymentScreenshotUrl,
 } from '../../cloud/cloud-db';
-import { formatDate, getIcon } from '../../utils';
+import { formatDate, getIcon, escapeHtml } from '../../utils';
 import { showToast } from '../../components/toast';
 import { showModal } from '../../components/modal';
 import type { CloudProfile, CloudSubscription, SubscriptionPlan } from '../../cloud/types';
@@ -62,8 +63,8 @@ function renderList(root: HTMLElement, users: CloudProfile[], subs: CloudSubscri
         return `
               <tr class="border-b border-white/5 last:border-0">
                 <td class="p-4">
-                  <p class="font-medium">${u.fullName || '—'}</p>
-                  <p class="text-slate-400 text-xs">${u.email}</p>
+                  <p class="font-medium">${escapeHtml(u.fullName) || '—'}</p>
+                  <p class="text-slate-400 text-xs">${escapeHtml(u.email)}</p>
                 </td>
                 <td class="p-4"><span class="px-2 py-0.5 rounded-full text-xs ${u.role === 'admin' ? 'bg-primary-500/20 text-primary-400' : 'bg-white/10 text-slate-300'}">${u.role}</span></td>
                 <td class="p-4"><span class="px-2 py-0.5 rounded-full text-xs ${u.status === 'active' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}">${u.status}</span></td>
@@ -108,8 +109,8 @@ function openManageUserModal(user: CloudProfile, sub: CloudSubscription | undefi
     form.className = 'space-y-4';
     form.innerHTML = `
     <div>
-      <p class="font-medium">${user.fullName || user.email}</p>
-      <p class="text-sm text-slate-400">${user.email}</p>
+      <p class="font-medium">${escapeHtml(user.fullName || user.email)}</p>
+      <p class="text-sm text-slate-400">${escapeHtml(user.email)}</p>
     </div>
     <div>
       <label class="block text-sm font-medium mb-1">Account status</label>
@@ -122,7 +123,7 @@ function openManageUserModal(user: CloudProfile, sub: CloudSubscription | undefi
       <div>
         <label class="block text-sm font-medium mb-1">Plan</label>
         <select name="planId" class="glass-input w-full">
-          ${plans.map(p => `<option value="${p.id}" ${p.id === sub.planId ? 'selected' : ''}>${p.name}</option>`).join('')}
+          ${plans.map(p => `<option value="${p.id}" ${p.id === sub.planId ? 'selected' : ''}>${escapeHtml(p.name)}</option>`).join('')}
         </select>
       </div>
       <div>
@@ -135,8 +136,16 @@ function openManageUserModal(user: CloudProfile, sub: CloudSubscription | undefi
       ${sub.paymentReference ? `
         <div>
           <label class="block text-sm font-medium mb-1">Payment reference / UTR submitted</label>
-          <p class="glass-input w-full font-mono text-sm">${sub.paymentReference}</p>
+          <p class="glass-input w-full font-mono text-sm">${escapeHtml(sub.paymentReference)}</p>
           <p class="text-xs text-slate-500 mt-1">Check this against your UPI app before activating.</p>
+        </div>
+      ` : ''}
+      ${sub.paymentScreenshotPath ? `
+        <div>
+          <label class="block text-sm font-medium mb-1">Payment screenshot</label>
+          <button type="button" id="view-screenshot-btn" class="glass-button-secondary w-full flex items-center justify-center gap-2">
+            ${getIcon('image', 16)} View Screenshot
+          </button>
         </div>
       ` : ''}
       <div>
@@ -155,6 +164,20 @@ function openManageUserModal(user: CloudProfile, sub: CloudSubscription | undefi
 
     const close = showModal({ title: 'Manage User', content: form, footer, size: 'lg' });
     footer.querySelector('[data-action="cancel"]')?.addEventListener('click', close);
+
+    form.querySelector('#view-screenshot-btn')?.addEventListener('click', async (e) => {
+        const btn = e.currentTarget as HTMLButtonElement;
+        btn.disabled = true;
+        try {
+            const url = await getPaymentScreenshotUrl(sub!.paymentScreenshotPath!);
+            window.open(url, '_blank');
+        } catch (error) {
+            console.error(error);
+            showToast('Failed to load screenshot', { type: 'error' });
+        } finally {
+            btn.disabled = false;
+        }
+    });
 
     form.addEventListener('submit', async (e) => {
         e.preventDefault();

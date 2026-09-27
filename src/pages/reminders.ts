@@ -4,7 +4,7 @@
 
 import { db } from '../db';
 import { store } from '../stores';
-import { formatDate, formatCurrency } from '../utils';
+import { formatDate, formatCurrency, escapeHtml } from '../utils';
 import { showToast } from '../components/toast';
 import { showModal } from '../components/modal';
 import type { Reminder } from '../types';
@@ -46,7 +46,7 @@ export async function renderReminders(): Promise<void> {
                       <i data-lucide="${cat?.icon || 'bell'}" class="w-5 h-5"></i>
                     </div>
                     <div>
-                      <h4 class="font-medium">${reminder.name}</h4>
+                      <h4 class="font-medium">${escapeHtml(reminder.name)}</h4>
                       <p class="text-sm ${isOverdue ? 'text-red-400' : 'text-slate-400'} capitalize">
                         ${reminder.completed ? 'Paid' : isOverdue ? 'Overdue' : 'Due'}: ${formatDate(reminder.dueDate)} · ${reminder.frequency}
                       </p>
@@ -137,7 +137,7 @@ function openReminderModal(reminder?: Reminder): void {
     <div>
       <label class="block text-sm font-medium mb-1">Name</label>
       <input type="text" name="name" required
-             value="${reminder?.name || ''}" class="glass-input w-full" placeholder="e.g., Electricity Bill">
+             value="${escapeHtml(reminder?.name)}" class="glass-input w-full" placeholder="e.g., Electricity Bill">
     </div>
 
     <div class="grid grid-cols-2 gap-4">
@@ -160,7 +160,7 @@ function openReminderModal(reminder?: Reminder): void {
         <select name="categoryId" class="glass-input w-full">
           <option value="">None</option>
           ${categories.map(c => `
-            <option value="${c.id}" ${reminder?.categoryId === c.id ? 'selected' : ''}>${c.name}</option>
+            <option value="${c.id}" ${reminder?.categoryId === c.id ? 'selected' : ''}>${escapeHtml(c.name)}</option>
           `).join('')}
         </select>
       </div>
@@ -176,7 +176,7 @@ function openReminderModal(reminder?: Reminder): void {
 
     <div>
       <label class="block text-sm font-medium mb-1">Notes (optional)</label>
-      <textarea name="notes" rows="2" class="glass-input w-full" placeholder="Add details...">${reminder?.notes || ''}</textarea>
+      <textarea name="notes" rows="2" class="glass-input w-full" placeholder="Add details...">${escapeHtml(reminder?.notes)}</textarea>
     </div>
   `;
 
@@ -198,8 +198,13 @@ function openReminderModal(reminder?: Reminder): void {
     form.addEventListener('submit', async (e) => {
         e.preventDefault();
         const formData = new FormData(form);
+        const name = (formData.get('name') as string).trim();
+        if (!name) {
+            showToast('Reminder name is required', { type: 'error' });
+            return;
+        }
         const data: any = {
-            name: formData.get('name') as string,
+            name,
             amount: parseFloat(formData.get('amount') as string),
             dueDate: new Date(formData.get('dueDate') as string).toISOString(),
             categoryId: (formData.get('categoryId') as string) || undefined,

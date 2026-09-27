@@ -249,3 +249,15 @@ body {
 .hide-scrollbar::-webkit-scrollbar {
   display: none;
 }
+
+/* Respect the OS-level "reduce motion" preference — collapse all animations
+   and transitions to near-instant rather than skipping them outright, so
+   state changes (e.g. a modal appearing) are still visible, just not animated. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

@@ -4,7 +4,7 @@
  */
 
 import { db } from '../db';
-import { formatCurrency, formatDate, getIcon } from '../utils';
+import { formatCurrency, formatDate, getIcon, escapeHtml } from '../utils';
 import { showToast } from '../components/toast';
 import { showModal } from '../components/modal';
 import { withTierGate } from '../components/upgrade-gate';
@@ -98,8 +98,8 @@ async function renderMemoryTimelineImpl(): Promise<void> {
                       ${getIcon(entry.icon, 16)}
                     </div>
                     <div class="flex-1">
-                      <p class="font-medium">${entry.title}</p>
-                      ${entry.subtitle ? `<p class="text-sm text-slate-400 mt-0.5">${entry.subtitle}</p>` : ''}
+                      <p class="font-medium">${escapeHtml(entry.title)}</p>
+                      ${entry.subtitle ? `<p class="text-sm text-slate-400 mt-0.5">${escapeHtml(entry.subtitle)}</p>` : ''}
                       <p class="text-xs text-slate-500 mt-1">${formatDate(entry.date)}</p>
                     </div>
                     ${entry.kind === 'life-event' ? `<button class="delete-life-event p-1.5 text-slate-500 hover:text-red-400" data-id="${entry.id}" aria-label="Delete">${getIcon('trash-2', 14)}</button>` : ''}

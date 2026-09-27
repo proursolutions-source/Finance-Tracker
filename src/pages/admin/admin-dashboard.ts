@@ -3,7 +3,7 @@
  */
 import { withAdminGuard, adminTabs } from './admin-guard';
 import { adminListUsers, adminListSubscriptions, getPaymentSettings, updatePaymentSettings } from '../../cloud/cloud-db';
-import { formatCurrency, getIcon } from '../../utils';
+import { formatCurrency, getIcon, escapeHtml } from '../../utils';
 import { showToast } from '../../components/toast';
 
 export async function renderAdminDashboard(): Promise<void> {
@@ -54,8 +54,8 @@ export async function renderAdminDashboard(): Promise<void> {
             <div class="space-y-2">
               ${pendingSubs.slice(0, 5).map(s => `
                 <div class="flex items-center justify-between text-sm py-2 border-b border-white/5 last:border-0">
-                  <span>${s.profile?.email || s.userId}</span>
-                  <span class="text-slate-400">${s.plan?.name || ''}${s.paymentReference ? ` &middot; ref: <span class="font-mono">${s.paymentReference}</span>` : ''}</span>
+                  <span>${escapeHtml(s.profile?.email) || s.userId}</span>
+                  <span class="text-slate-400">${escapeHtml(s.plan?.name)}${s.paymentReference ? ` &middot; ref: <span class="font-mono">${escapeHtml(s.paymentReference)}</span>` : ''}</span>
                 </div>
               `).join('')}
             </div>
@@ -69,11 +69,11 @@ export async function renderAdminDashboard(): Promise<void> {
           <form id="payment-settings-form" class="grid gap-4 sm:grid-cols-2 items-end">
             <div>
               <label class="block text-sm font-medium mb-1">Your UPI ID</label>
-              <input type="text" name="upiId" class="glass-input w-full" placeholder="yourname@upi" value="${paymentSettings?.upiId || ''}">
+              <input type="text" name="upiId" class="glass-input w-full" placeholder="yourname@upi" value="${escapeHtml(paymentSettings?.upiId)}">
             </div>
             <div>
               <label class="block text-sm font-medium mb-1">Payee name</label>
-              <input type="text" name="payeeName" class="glass-input w-full" placeholder="Your name or business" value="${paymentSettings?.payeeName || ''}">
+              <input type="text" name="payeeName" class="glass-input w-full" placeholder="Your name or business" value="${escapeHtml(paymentSettings?.payeeName)}">
             </div>
             <div class="sm:col-span-2">
               <button type="submit" class="glass-button">Save Payment Settings</button>

@@ -6,7 +6,8 @@
  */
 import { isCloudConfigured, getCloudUser, isCurrentUserAdmin } from '../../cloud/cloud-auth';
 import { renderCloudAuthGate } from '../../components/cloud-auth-gate';
-import { getIcon } from '../../utils';
+import { renderAnimatedLoader } from '../../components/animated-loader';
+import { getIcon, escapeHtml } from '../../utils';
 
 export async function withAdminGuard(root: HTMLElement, render: () => Promise<void>): Promise<void> {
     if (!isCloudConfigured()) {
@@ -14,6 +15,7 @@ export async function withAdminGuard(root: HTMLElement, render: () => Promise<vo
         return;
     }
 
+    renderAnimatedLoader(root);
     const user = await getCloudUser();
     if (!user) {
         renderCloudAuthGate(root, { title: 'Admin Portal', onSuccess: render });
@@ -26,7 +28,7 @@ export async function withAdminGuard(root: HTMLElement, render: () => Promise<vo
       <div class="glass-card p-8 text-center max-w-lg mx-auto">
         ${getIcon('shield-alert', 40, 'text-red-400 mx-auto')}
         <h2 class="text-xl font-bold mt-4 mb-2">Not authorized</h2>
-        <p class="text-slate-400 text-sm">Signed in as <strong>${user.email}</strong>, which isn't the admin account for this MoneyFlow instance.</p>
+        <p class="text-slate-400 text-sm">Signed in as <strong>${escapeHtml(user.email)}</strong>, which isn't the admin account for this MoneyFlow instance.</p>
       </div>
     `;
         if ((window as any).lucide) (window as any).lucide.createIcons();
@@ -42,6 +44,9 @@ export function adminTabs(active: string): string {
         { key: 'users', label: 'Users', href: '#/admin/users', icon: 'users' },
         { key: 'plans', label: 'Plans', href: '#/admin/plans', icon: 'package' },
         { key: 'discounts', label: 'Discounts', href: '#/admin/discounts', icon: 'percent' },
+        { key: 'logs', label: 'Logs', href: '#/admin/logs', icon: 'scroll-text' },
+        { key: 'support', label: 'Support', href: '#/admin/support', icon: 'life-buoy' },
+        { key: 'ops', label: 'Ops', href: '#/admin/ops', icon: 'settings-2' },
     ];
     return `
     <div class="flex gap-2 mb-6 flex-wrap">

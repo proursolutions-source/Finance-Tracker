@@ -4,6 +4,7 @@
  * the rest of the app works fully offline without ever touching this.
  */
 import { requireSupabase, isCloudConfigured, onPasswordRecovery } from '../lib/supabase';
+import { logEvent } from './app-log';
 import type { CloudProfile } from './types';
 import type { User } from '@supabase/supabase-js';
 
@@ -26,13 +27,18 @@ export async function signUpCloud(email: string, password: string, fullName: str
     });
     if (error) throw error;
     if (!data.user) throw new Error('Sign up did not return a user.');
+    void logEvent('signup', `New account created: ${email}`);
     return { user: data.user, sessionEstablished: !!data.session };
 }
 
 export async function signInCloud(email: string, password: string): Promise<User> {
     const supabase = requireSupabase();
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) throw error;
+    if (error) {
+        void logEvent('login_failed', `Failed login attempt for ${email}`, { email });
+        throw error;
+    }
+    void logEvent('login_success', `Signed in: ${email}`);
     return data.user;
 }
 
@@ -53,7 +59,13 @@ export async function signInWithGoogle(): Promise<void> {
 
 export async function signOutCloud(): Promise<void> {
     const supabase = requireSupabase();
+    const { data: userData } = await supabase.auth.getUser();
     await supabase.auth.signOut();
+    void logEvent('logout', `Signed out: ${userData.user?.email ?? 'unknown'}`);
+    try {
+        const { setAdminCache } = await import('./entitlements');
+        setAdminCache(false);
+    } catch { /* ignore */ }
 }
 
 /**

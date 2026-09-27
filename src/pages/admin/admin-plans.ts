@@ -3,7 +3,7 @@
  */
 import { withAdminGuard, adminTabs } from './admin-guard';
 import { listPlans, createPlan, updatePlan, deletePlan } from '../../cloud/cloud-db';
-import { formatCurrency, getIcon } from '../../utils';
+import { formatCurrency, getIcon, escapeHtml } from '../../utils';
 import { showToast } from '../../components/toast';
 import { showModal, showConfirm } from '../../components/modal';
 import type { SubscriptionPlan, BillingInterval, PlanTier } from '../../cloud/types';
@@ -39,7 +39,7 @@ function renderList(root: HTMLElement, plans: SubscriptionPlan[]): void {
       ${plans.map(plan => `
         <div class="glass-card p-5 ${!plan.isActive ? 'opacity-50' : ''}">
           <div class="flex items-center justify-between mb-2">
-            <h3 class="font-bold">${plan.name}</h3>
+            <h3 class="font-bold">${escapeHtml(plan.name)}</h3>
             <div class="flex gap-1.5">
               <span class="text-xs px-2 py-0.5 rounded-full capitalize ${{ free: 'bg-white/10 text-slate-300', pro: 'bg-primary-500/20 text-primary-400', premium: 'bg-purple-500/20 text-purple-400' }[plan.tier]}">${plan.tier}</span>
               <span class="text-xs px-2 py-0.5 rounded-full ${plan.isActive ? 'bg-green-500/20 text-green-400' : 'bg-white/10 text-slate-400'}">${plan.isActive ? 'Active' : 'Inactive'}</span>
@@ -48,7 +48,7 @@ function renderList(root: HTMLElement, plans: SubscriptionPlan[]): void {
           <p class="text-sm text-slate-400 mb-2">${plan.description || ''}</p>
           <p class="text-xl font-bold mb-3">${plan.priceInr === 0 ? 'Free' : formatCurrency(plan.priceInr)}<span class="text-sm text-slate-400 font-normal">${plan.priceInr === 0 ? '' : ` / ${plan.billingInterval}`}</span></p>
           <ul class="text-xs text-slate-400 space-y-1 mb-4">
-            ${plan.features.map(f => `<li>&bull; ${f}</li>`).join('')}
+            ${plan.features.map(f => `<li>&bull; ${escapeHtml(f)}</li>`).join('')}
           </ul>
           <div class="flex gap-2">
             <button class="edit-plan-btn glass-button-secondary flex-1 text-sm" data-id="${plan.id}">Edit</button>
@@ -87,11 +87,11 @@ function openPlanModal(existing?: SubscriptionPlan): void {
     form.innerHTML = `
     <div>
       <label class="block text-sm font-medium mb-1">Plan Name</label>
-      <input type="text" name="name" required value="${existing?.name || ''}" class="glass-input w-full">
+      <input type="text" name="name" required value="${escapeHtml(existing?.name)}" class="glass-input w-full">
     </div>
     <div>
       <label class="block text-sm font-medium mb-1">Description</label>
-      <input type="text" name="description" value="${existing?.description || ''}" class="glass-input w-full">
+      <input type="text" name="description" value="${escapeHtml(existing?.description)}" class="glass-input w-full">
     </div>
     <div class="grid grid-cols-2 gap-4">
       <div>
@@ -114,7 +114,7 @@ function openPlanModal(existing?: SubscriptionPlan): void {
     </div>
     <div>
       <label class="block text-sm font-medium mb-1">Features (one per line)</label>
-      <textarea name="features" rows="4" class="glass-input w-full">${(existing?.features || []).join('\n')}</textarea>
+      <textarea name="features" rows="4" class="glass-input w-full">${escapeHtml((existing?.features || []).join('\n'))}</textarea>
     </div>
     <label class="flex items-center gap-2 text-sm">
       <input type="checkbox" name="isActive" ${existing?.isActive !== false ? 'checked' : ''}>

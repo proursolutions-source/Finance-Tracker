@@ -3,7 +3,7 @@
  */
 import { withAdminGuard, adminTabs } from './admin-guard';
 import { listDiscounts, createDiscount, updateDiscount, deleteDiscount, listPlans } from '../../cloud/cloud-db';
-import { formatCurrency, formatDate, getIcon } from '../../utils';
+import { formatCurrency, formatDate, getIcon, escapeHtml } from '../../utils';
 import { showToast } from '../../components/toast';
 import { showModal, showConfirm } from '../../components/modal';
 import type { DiscountCode, DiscountType, SubscriptionPlan } from '../../cloud/types';
@@ -94,7 +94,7 @@ function openDiscountModal(existing: DiscountCode | undefined, plans: Subscripti
     form.innerHTML = `
     <div>
       <label class="block text-sm font-medium mb-1">Code</label>
-      <input type="text" name="code" required value="${existing?.code || ''}" class="glass-input w-full uppercase" placeholder="e.g., LAUNCH20">
+      <input type="text" name="code" required value="${escapeHtml(existing?.code)}" class="glass-input w-full uppercase" placeholder="e.g., LAUNCH20">
     </div>
     <div class="grid grid-cols-2 gap-4">
       <div>
@@ -122,12 +122,12 @@ function openDiscountModal(existing: DiscountCode | undefined, plans: Subscripti
     <div>
       <label class="block text-sm font-medium mb-1">Applicable plans (leave empty for all)</label>
       <select name="applicablePlanIds" multiple class="glass-input w-full h-24">
-        ${plans.map(p => `<option value="${p.id}" ${existing?.applicablePlanIds?.includes(p.id) ? 'selected' : ''}>${p.name}</option>`).join('')}
+        ${plans.map(p => `<option value="${p.id}" ${existing?.applicablePlanIds?.includes(p.id) ? 'selected' : ''}>${escapeHtml(p.name)}</option>`).join('')}
       </select>
     </div>
     <div>
       <label class="block text-sm font-medium mb-1">Notes (optional)</label>
-      <input type="text" name="notes" value="${existing?.notes || ''}" class="glass-input w-full">
+      <input type="text" name="notes" value="${escapeHtml(existing?.notes)}" class="glass-input w-full">
     </div>
     <label class="flex items-center gap-2 text-sm">
       <input type="checkbox" name="isActive" ${existing?.isActive !== false ? 'checked' : ''}>

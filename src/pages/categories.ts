@@ -6,6 +6,7 @@ import { db } from '../db';
 import { store } from '../stores';
 import { showToast } from '../components/toast';
 import { showModal } from '../components/modal';
+import { escapeHtml } from '../utils';
 import type { Category } from '../types';
 
 export async function renderCategories(): Promise<void> {
@@ -39,7 +40,7 @@ export async function renderCategories(): Promise<void> {
                 </button>
               </div>
               <i data-lucide="${cat.icon || 'circle'}" class="w-8 h-8 mx-auto mb-2" style="color: ${cat.color || '#60a5fa'}"></i>
-              <h3 class="font-medium mb-1">${cat.name}</h3>
+              <h3 class="font-medium mb-1">${escapeHtml(cat.name)}</h3>
               <span class="text-xs text-slate-400 capitalize">${cat.type}</span>
             </div>
           `).join('')}
@@ -101,7 +102,7 @@ function openCategoryModal(category?: Category): void {
     <div>
       <label class="block text-sm font-medium mb-1">Name</label>
       <input type="text" name="name" required
-             value="${category?.name || ''}" class="glass-input w-full" placeholder="e.g., Pets">
+             value="${escapeHtml(category?.name)}" class="glass-input w-full" placeholder="e.g., Pets">
     </div>
 
     <div>
@@ -129,6 +130,28 @@ function openCategoryModal(category?: Category): void {
       <label class="block text-sm font-medium mb-1">Color</label>
       <div class="flex gap-2 flex-wrap">
         ${colorOptions}
+      </div>
+    </div>
+
+    <div class="border-t border-white/10 pt-4">
+      <p class="text-xs text-slate-400 mb-2">Optional tags used by the Money Tools expense-analysis charts. Leave unset if unsure — untagged categories are simply left out of those breakdowns.</p>
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs font-medium mb-1">Essential?</label>
+          <select name="isEssential" class="glass-input w-full text-sm">
+            <option value="" ${category?.isEssential == null ? 'selected' : ''}>Not tagged</option>
+            <option value="1" ${category?.isEssential != null && !!category.isEssential ? 'selected' : ''}>Essential</option>
+            <option value="0" ${category?.isEssential != null && !category.isEssential ? 'selected' : ''}>Non-essential</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-medium mb-1">Fixed or variable?</label>
+          <select name="isFixed" class="glass-input w-full text-sm">
+            <option value="" ${category?.isFixed == null ? 'selected' : ''}>Not tagged</option>
+            <option value="1" ${category?.isFixed != null && !!category.isFixed ? 'selected' : ''}>Fixed</option>
+            <option value="0" ${category?.isFixed != null && !category.isFixed ? 'selected' : ''}>Variable</option>
+          </select>
+        </div>
       </div>
     </div>
   `;
@@ -165,11 +188,20 @@ function openCategoryModal(category?: Category): void {
     form.addEventListener('submit', async (e) => {
         e.preventDefault();
         const formData = new FormData(form);
+        const name = (formData.get('name') as string).trim();
+        if (!name) {
+            showToast('Category name is required', { type: 'error' });
+            return;
+        }
+        const essentialRaw = formData.get('isEssential') as string;
+        const fixedRaw = formData.get('isFixed') as string;
         const data: any = {
-            name: formData.get('name') as string,
+            name,
             type: formData.get('type') as 'income' | 'expense' | 'both',
             icon: (formData.get('icon') as string) || undefined,
             color: formData.get('color') as string,
+            isEssential: essentialRaw === '' ? undefined : essentialRaw === '1',
+            isFixed: fixedRaw === '' ? undefined : fixedRaw === '1',
         };
 
         try {

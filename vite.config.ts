@@ -11,6 +11,18 @@ export default defineConfig({
             input: {
                 main: resolve(__dirname, 'index.html'),
             },
+            output: {
+                // Splits large, rarely-changing third-party libraries into their
+                // own cacheable chunks instead of one ~750KB main bundle — keeps
+                // each chunk under Vite's 500KB warning threshold and means a
+                // change to app code doesn't invalidate the vendor cache.
+                manualChunks: {
+                    supabase: ['@supabase/supabase-js'],
+                    charts: ['chart.js'],
+                    'date-utils': ['date-fns'],
+                    qrcode: ['qrcode'],
+                },
+            },
         },
     },
     worker: {

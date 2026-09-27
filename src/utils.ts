@@ -15,6 +15,23 @@ export function uuid(): string {
 }
 
 /**
+ * Escape a string for safe interpolation into an `innerHTML` template.
+ * Pages build their markup as template strings rather than DOM APIs, so any
+ * free-text field a user can type (payee, notes, names, etc.) must go
+ * through this before interpolation — otherwise a payee like
+ * `<img src=x onerror=alert(1)>` renders as live HTML instead of text.
+ */
+export function escapeHtml(value: unknown): string {
+    if (value === null || value === undefined) return '';
+    return String(value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+/**
  * Convert a `<input type="date">` value (YYYY-MM-DD, no time/timezone) into an ISO timestamp,
  * combining the picked calendar date with the current local time-of-day.
  * `new Date(dateStr).toISOString()` parses date-only strings as UTC midnight, which in
@@ -179,24 +196,6 @@ export function throttle<T extends (...args: any[]) => any>(
 }
 
 /**
- * Sanitize HTML to prevent XSS
- */
-export function sanitizeHTML(html: string): string {
-    const temp = document.createElement('div');
-    temp.textContent = html;
-    return temp.innerHTML;
-}
-
-/**
- * Escape HTML entities
- */
-export function escapeHTML(str: string): string {
-    const div = document.createElement('div');
-    div.textContent = str;
-    return div.innerHTML;
-}
-
-/**
  * Parse JSON safely
  */
 export function safeJSONParse<T>(json: string, fallback: T): T {
@@ -224,6 +223,40 @@ export async function fileToArrayBuffer(file: File): Promise<ArrayBuffer> {
         reader.onerror = reject;
         reader.readAsArrayBuffer(file);
     });
+}
+
+export const MAX_RECEIPT_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+
+/** Magic-byte signatures for the file types the receipt uploader accepts. */
+const FILE_SIGNATURES: Array<{ mime: string; bytes: number[]; offset?: number }> = [
+    { mime: 'image/png', bytes: [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a] },
+    { mime: 'image/jpeg', bytes: [0xff, 0xd8, 0xff] },
+    { mime: 'image/gif', bytes: [0x47, 0x49, 0x46, 0x38] },
+    { mime: 'image/webp', bytes: [0x52, 0x49, 0x46, 0x46] }, // 'RIFF'; WEBP marker follows at offset 8, checked separately below
+    { mime: 'application/pdf', bytes: [0x25, 0x50, 0x44, 0x46] }, // '%PDF'
+];
+
+/**
+ * Verifies a file's actual content matches a real image (or PDF), rather than
+ * trusting its extension or declared MIME type — both of which are trivial to
+ * spoof (e.g. renaming a `.html` file with an embedded `<script>` to
+ * `photo.jpg`). Reads only the first 12 bytes, not the whole file.
+ */
+export async function isGenuineReceiptFile(file: File): Promise<boolean> {
+    if (file.size === 0 || file.size > MAX_RECEIPT_FILE_SIZE) return false;
+
+    const head = new Uint8Array(await file.slice(0, 12).arrayBuffer());
+    for (const sig of FILE_SIGNATURES) {
+        if (sig.bytes.every((byte, i) => head[i] === byte)) {
+            if (sig.mime === 'image/webp') {
+                // RIFF container also covers WAV/AVI; confirm the WEBP tag at byte 8.
+                const tag = String.fromCharCode(head[8], head[9], head[10], head[11]);
+                if (tag !== 'WEBP') continue;
+            }
+            return true;
+        }
+    }
+    return false;
 }
 
 /**

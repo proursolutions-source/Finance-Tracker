@@ -108,9 +108,13 @@ async function initDatabase(): Promise<void> {
     try {
         console.log('[DB Worker] Initializing SQL.js...');
 
-        // Initialize SQL.js
+        // Initialize SQL.js. The wasm binary is bundled locally (public/sql-wasm.wasm,
+        // copied from node_modules/sql.js/dist at build time) rather than fetched from
+        // sql.js.org at runtime — this app's entire premise is offline-first local
+        // storage, so its own database engine can't depend on internet access to even
+        // start, especially once packaged as a native app with no guaranteed connectivity.
         SQL = await initSqlJs({
-            locateFile: (file: string) => `https://sql.js.org/dist/${file}`
+            locateFile: (file: string) => `/${file}`
         });
 
         console.log('[DB Worker] SQL.js loaded');
@@ -538,6 +542,74 @@ async function migrateSchema(): Promise<void> {
         CREATE INDEX IF NOT EXISTS idx_life_events_occurredAt ON life_events(occurredAt DESC);
         `);
         console.log('[DB Worker] ✅ Memory tables created');
+
+        // 12. Investment transactions — manual buy/sell/dividend ledger against
+        // the existing investment-type accounts (mutual-fund/stocks/gold/property).
+        // No live market-data feed is integrated; account balances remain the
+        // user's own manually-updated valuations, same as before this table existed.
+        console.log('[DB Worker] Creating investment_transactions table...');
+        db.run(`
+        CREATE TABLE IF NOT EXISTS investment_transactions (
+          id TEXT PRIMARY KEY,
+          accountId TEXT NOT NULL,
+          type TEXT CHECK(type IN ('buy','sell','dividend','other')) NOT NULL,
+          date TEXT NOT NULL,
+          quantity REAL,
+          pricePerUnit REAL,
+          amount REAL NOT NULL,
+          notes TEXT,
+          createdAt TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_investment_transactions_accountId ON investment_transactions(accountId);
+        CREATE INDEX IF NOT EXISTS idx_investment_transactions_date ON investment_transactions(date DESC);
+        `);
+        console.log('[DB Worker] ✅ Investment transactions table created');
+
+        // 13. Document vault — insurance/tax/loan/other documents, stored the
+        // same way receipts already are (local blob store), so no new cloud
+        // storage or sync is introduced.
+        console.log('[DB Worker] Creating documents table...');
+        db.run(`
+        CREATE TABLE IF NOT EXISTS documents (
+          id TEXT PRIMARY KEY,
+          category TEXT CHECK(category IN ('insurance','tax','loan','other')) NOT NULL,
+          name TEXT NOT NULL,
+          filePath TEXT NOT NULL,
+          expiryDate TEXT,
+          notes TEXT,
+          createdAt TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_documents_expiryDate ON documents(expiryDate);
+        `);
+        console.log('[DB Worker] ✅ Documents table created');
+
+        // 14. Category tags — power the Fixed vs Variable and Essential vs
+        // Non-Essential expense-analysis tools. Nullable/untagged categories
+        // are simply excluded from those breakdowns rather than guessed at.
+        try {
+            db.exec('SELECT isEssential, isFixed FROM categories LIMIT 1');
+        } catch (e) {
+            console.log('[DB Worker] Migrating categories table (isEssential/isFixed)...');
+            try { db.run('ALTER TABLE categories ADD COLUMN isEssential INTEGER'); } catch (ignored) { }
+            try { db.run('ALTER TABLE categories ADD COLUMN isFixed INTEGER'); } catch (ignored) { }
+        }
+
+        // 15. Challenges — user-started gamification goals (no-spend streak,
+        // savings target, stay-under-budget) that the Achievements page
+        // tracks progress against.
+        console.log('[DB Worker] Creating challenges table...');
+        db.run(`
+        CREATE TABLE IF NOT EXISTS challenges (
+          id TEXT PRIMARY KEY,
+          type TEXT NOT NULL CHECK(type IN ('no-spend-days','savings-target','budget-adherence')),
+          target REAL NOT NULL,
+          startDate TEXT NOT NULL,
+          endDate TEXT NOT NULL,
+          status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active','completed','failed')),
+          createdAt TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+        `);
+        console.log('[DB Worker] ✅ Challenges table created');
 
         console.log('[DB Worker] 🎉 Migration v2 COMPLETE! All new tables created successfully!');
 

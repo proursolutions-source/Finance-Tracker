@@ -44,12 +44,17 @@ export function showModal(options: ModalOptions): () => void {
 
     const modalContent = document.createElement('div');
     modalContent.className = `glass-card ${SIZE_CLASSES[size]} w-full max-h-[90vh] flex flex-col animate-slide-up`;
+    modalContent.tabIndex = -1; // fallback focus target when the dialog has no focusable field
+    const titleId = `modal-title-${Math.random().toString(36).slice(2)}`;
+    modalContent.setAttribute('role', 'dialog');
+    modalContent.setAttribute('aria-modal', 'true');
+    modalContent.setAttribute('aria-labelledby', titleId);
 
     // Header
     const header = document.createElement('div');
     header.className = 'flex items-center justify-between p-6 border-b border-white/10';
     header.innerHTML = `
-    <h2 class="text-xl font-bold">${title}</h2>
+    <h2 id="${titleId}" class="text-xl font-bold">${title}</h2>
     <button class="modal-close hover:opacity-70 transition-opacity" aria-label="Close dialog">
       ${getIcon('x', 24)}
     </button>
@@ -105,12 +110,44 @@ export function showModal(options: ModalOptions): () => void {
         (window as any).lucide.createIcons();
     }
 
+    // Accessibility: move focus into the dialog on open, trap Tab navigation
+    // inside it while open, and restore focus to whatever triggered it on
+    // close — without this, keyboard/screen-reader users lose their place
+    // and can tab out into the page behind the modal.
+    const previouslyFocused = document.activeElement as HTMLElement | null;
+    const getFocusable = (): HTMLElement[] =>
+        Array.from(modalContent.querySelectorAll<HTMLElement>(
+            'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
+        )).filter(el => el.offsetParent !== null);
+
+    const handleFocusTrap = (e: KeyboardEvent) => {
+        if (e.key !== 'Tab') return;
+        const focusable = getFocusable();
+        if (focusable.length === 0) return;
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (e.shiftKey && document.activeElement === first) {
+            e.preventDefault();
+            last.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+            e.preventDefault();
+            first.focus();
+        }
+    };
+    modal.addEventListener('keydown', handleFocusTrap);
+
+    // Focus the first focusable element (typically the first form field)
+    // rather than leaving focus stranded on whatever was behind the modal.
+    const firstFocusable = getFocusable()[0];
+    (firstFocusable ?? modalContent).focus();
+
     // Close function
     const close = () => {
         modal.style.opacity = '0';
         setTimeout(() => {
             modal.remove();
             if (onClose) onClose();
+            previouslyFocused?.focus();
         }, 200);
     };
 

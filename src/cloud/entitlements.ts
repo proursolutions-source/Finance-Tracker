@@ -18,6 +18,7 @@ import { getMySubscription } from './cloud-db';
 import type { PlanTier } from './types';
 
 const CACHE_KEY = 'moneyflow-entitlement-cache';
+const ADMIN_CACHE_KEY = 'moneyflow-admin-cache';
 const TIER_RANK: Record<PlanTier, number> = { free: 0, pro: 1, premium: 2 };
 
 export const TIER_LABELS: Record<PlanTier, string> = {
@@ -34,6 +35,10 @@ export const FEATURE_TIER = {
     ocr: 'pro',
     fullReports: 'pro',
     memory: 'premium',
+    investments: 'pro',
+    documents: 'pro',
+    loanTools: 'pro',
+    moneyTools: 'pro',
 } as const satisfies Record<string, PlanTier>;
 
 interface EntitlementCache {
@@ -56,13 +61,35 @@ function writeCache(tier: PlanTier): void {
 }
 
 /**
+ * Remembers whether the current cloud session belongs to an admin, so
+ * `getCachedTier`/`hasFeature` can bypass tier checks for them synchronously.
+ * Admins run every feature to support and moderate the product, so they
+ * should never be blocked by their own subscription plan.
+ */
+export function setAdminCache(isAdmin: boolean): void {
+    try {
+        if (isAdmin) localStorage.setItem(ADMIN_CACHE_KEY, '1');
+        else localStorage.removeItem(ADMIN_CACHE_KEY);
+    } catch { /* ignore */ }
+}
+
+function isAdminCached(): boolean {
+    try {
+        return localStorage.getItem(ADMIN_CACHE_KEY) === '1';
+    } catch {
+        return false;
+    }
+}
+
+/**
  * The tier to enforce right now, synchronously, from the last cloud check.
  * Without cloud configured at all, there is nothing to sell against — every
  * feature stays unlocked, matching this app's "fully offline, no subscription"
- * mode. Without cloud configured, this always returns 'premium'.
+ * mode. Without cloud configured, this always returns 'premium'. Admins also
+ * always resolve to 'premium', regardless of their own subscription.
  */
 export function getCachedTier(): PlanTier {
-    if (!isCloudConfigured()) return 'premium';
+    if (!isCloudConfigured() || isAdminCached()) return 'premium';
     return readCache()?.tier ?? 'free';
 }
 

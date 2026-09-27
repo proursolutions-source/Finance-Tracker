@@ -6,7 +6,7 @@ import { db } from '../db';
 import { router } from '../router';
 import { store } from '../stores';
 import { showToast } from '../components/toast';
-import { getCurrentISODate } from '../utils';
+import { getCurrentISODate, escapeHtml } from '../utils';
 import { startTour } from '../components/product-tour';
 import type { UserProfile, FinancialGoal } from '../types';
 
@@ -81,17 +81,17 @@ function renderStep(): void {
         <div class="space-y-4">
           <div>
             <label class="block text-sm font-medium mb-2">Full Name</label>
-            <input type="text" id="fullName" value="${formData.fullName || ''}" 
+            <input type="text" id="fullName" value="${escapeHtml(formData.fullName)}"
               class="glass-input w-full" placeholder="Enter your name">
           </div>
           <div>
             <label class="block text-sm font-medium mb-2">Preferred Name (optional)</label>
-            <input type="text" id="preferredName" value="${formData.preferredName || ''}" 
+            <input type="text" id="preferredName" value="${escapeHtml(formData.preferredName)}"
               class="glass-input w-full" placeholder="What should we call you?">
           </div>
           <div>
             <label class="block text-sm font-medium mb-2">Country</label>
-            <input type="text" id="country" value="${formData.country || 'India'}" 
+            <input type="text" id="country" value="${escapeHtml(formData.country) || 'India'}"
               class="glass-input w-full">
           </div>
           <div>
@@ -125,7 +125,7 @@ function renderStep(): void {
           </div>
           <div>
             <label class="block text-sm font-medium mb-2">City</label>
-            <input type="text" id="city" value="${formData.city || 'Chennai'}" 
+            <input type="text" id="city" value="${escapeHtml(formData.city) || 'Chennai'}"
               class="glass-input w-full">
           </div>
           <div>
@@ -266,11 +266,11 @@ function renderStep(): void {
         <div class="space-y-3 text-sm">
           <div class="flex justify-between py-2 border-b border-white/5">
             <span class="text-slate-400">Name:</span>
-            <span class="font-medium">${formData.fullName || 'Not set'}</span>
+            <span class="font-medium">${escapeHtml(formData.fullName) || 'Not set'}</span>
           </div>
           <div class="flex justify-between py-2 border-b border-white/5">
             <span class="text-slate-400">Location:</span>
-            <span class="font-medium">${formData.city}, ${formData.country}</span>
+            <span class="font-medium">${escapeHtml(formData.city)}, ${escapeHtml(formData.country)}</span>
           </div>
           <div class="flex justify-between py-2 border-b border-white/5">
             <span class="text-slate-400">Currency:</span>

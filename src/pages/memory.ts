@@ -4,7 +4,7 @@
  */
 
 import { db } from '../db';
-import { formatCurrency, formatDate, getIcon } from '../utils';
+import { formatCurrency, formatDate, getIcon, escapeHtml } from '../utils';
 import { showToast } from '../components/toast';
 import { withTierGate } from '../components/upgrade-gate';
 
@@ -59,8 +59,8 @@ async function renderMemoryImpl(): Promise<void> {
             return `
                   <div>
                     <p class="text-sm text-slate-300">${years} year${years !== 1 ? 's' : ''} ago</p>
-                    <p class="font-medium">"${m.title}"</p>
-                    ${m.body ? `<p class="text-sm text-slate-400 mt-1">${m.body}</p>` : ''}
+                    <p class="font-medium">"${escapeHtml(m.title)}"</p>
+                    ${m.body ? `<p class="text-sm text-slate-400 mt-1">${escapeHtml(m.body)}</p>` : ''}
                   </div>
                 `;
         }).join('<div class="border-t border-white/5"></div>')}
@@ -82,8 +82,8 @@ async function renderMemoryImpl(): Promise<void> {
               ${recentMemories.map(m => `
                 <div class="flex items-start justify-between gap-3 py-2 border-b border-white/5 last:border-0">
                   <div>
-                    <p class="font-medium">${m.title}</p>
-                    ${m.body ? `<p class="text-sm text-slate-400">${m.body}</p>` : ''}
+                    <p class="font-medium">${escapeHtml(m.title)}</p>
+                    ${m.body ? `<p class="text-sm text-slate-400">${escapeHtml(m.body)}</p>` : ''}
                     <p class="text-xs text-slate-500 mt-1">${formatDate(m.occurredAt)}</p>
                   </div>
                 </div>
@@ -109,7 +109,7 @@ async function renderMemoryImpl(): Promise<void> {
                     ${getIcon(MILESTONE_ICONS[m.type] || 'star', 16)}
                   </div>
                   <div class="flex-1">
-                    <p class="font-medium text-sm">${m.title}</p>
+                    <p class="font-medium text-sm">${escapeHtml(m.title)}</p>
                     <p class="text-xs text-slate-500">${formatDate(m.occurredAt)}${m.amount ? ` &middot; ${formatCurrency(m.amount)}` : ''}</p>
                   </div>
                   ${!m.autoDetected ? `<button class="delete-milestone p-1.5 text-slate-500 hover:text-red-400" data-id="${m.id}" aria-label="Delete milestone">${getIcon('trash-2', 14)}</button>` : ''}

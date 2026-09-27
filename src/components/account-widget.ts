@@ -5,7 +5,7 @@
  * Settings first.
  */
 import { store } from '../stores';
-import { getIcon } from '../utils';
+import { getIcon, escapeHtml } from '../utils';
 import { showConfirm } from './modal';
 import { isCloudConfigured, getCloudUser, signOutCloud } from '../cloud/cloud-auth';
 import { getCachedTier, TIER_LABELS } from '../cloud/entitlements';
@@ -35,12 +35,12 @@ export async function mountAccountWidget(): Promise<void> {
     container.innerHTML = `
     <div class="relative">
       <button id="account-widget-btn" class="w-10 h-10 rounded-full bg-primary-500/20 text-primary-400 font-bold flex items-center justify-center hover:bg-primary-500/30 transition-colors border border-primary-500/30" aria-label="Account menu">
-        ${initial}
+        ${escapeHtml(initial)}
       </button>
       <div id="account-widget-dropdown" class="hidden absolute right-0 mt-2 w-64 glass-card p-3 shadow-xl z-50">
         <div class="px-2 py-1 mb-2">
-          <p class="font-medium truncate">${displayName}</p>
-          ${email ? `<p class="text-xs text-slate-400 truncate">${email}</p>` : ''}
+          <p class="font-medium truncate">${escapeHtml(displayName)}</p>
+          ${email ? `<p class="text-xs text-slate-400 truncate">${escapeHtml(email)}</p>` : ''}
           <div class="flex items-center gap-2 mt-2">
             ${cloudProfile ? `<span class="px-2 py-0.5 rounded-full text-xs bg-white/10 text-slate-300 capitalize">${cloudProfile.role}</span>` : ''}
             <span class="px-2 py-0.5 rounded-full text-xs bg-primary-500/20 text-primary-400">${TIER_LABELS[getCachedTier()]}</span>

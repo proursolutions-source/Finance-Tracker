@@ -3,7 +3,7 @@
  * Provides a clean async API for database operations
  */
 
-import type { WorkerMessage, WorkerResponse, Transaction, Category, Budget, Reminder, UserProfile, LendingRecord, LendingPayment, Transfer, Memory, MemoryMedia, Milestone, LifeEvent } from './types';
+import type { WorkerMessage, WorkerResponse, Transaction, Category, Budget, Reminder, UserProfile, LendingRecord, LendingPayment, Transfer, Memory, MemoryMedia, Milestone, LifeEvent, InvestmentTransaction, FinanceDocument, Challenge } from './types';
 
 import DBWorker from './worker/db-worker?worker';
 
@@ -261,9 +261,11 @@ class DatabaseAPI {
         const id = crypto.randomUUID();
 
         await this.exec(
-            `INSERT INTO categories (id, name, type, icon, budget, hidden, color)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
-            [id, cat.name, cat.type, cat.icon || null, cat.budget || null, cat.hidden ? 1 : 0, cat.color || null]
+            `INSERT INTO categories (id, name, type, icon, budget, hidden, color, isEssential, isFixed)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [id, cat.name, cat.type, cat.icon || null, cat.budget || null, cat.hidden ? 1 : 0, cat.color || null,
+            cat.isEssential === undefined ? null : (cat.isEssential ? 1 : 0),
+            cat.isFixed === undefined ? null : (cat.isFixed ? 1 : 0)]
         );
 
         return id;
@@ -274,9 +276,9 @@ class DatabaseAPI {
         const params: any[] = [];
 
         Object.entries(updates).forEach(([key, value]) => {
-            if (key === 'hidden') {
+            if (key === 'hidden' || key === 'isEssential' || key === 'isFixed') {
                 fields.push(`${key} = ?`);
-                params.push(value ? 1 : 0);
+                params.push(value === undefined ? null : (value ? 1 : 0));
             } else {
                 fields.push(`${key} = ?`);
                 params.push(value);
@@ -767,6 +769,80 @@ class DatabaseAPI {
                 await this.updateLending(lendingId, { settled: false });
             }
         }
+    }
+
+    // === INVESTMENT TRANSACTIONS ===
+
+    async getInvestmentTransactions(accountId?: string): Promise<InvestmentTransaction[]> {
+        return accountId
+            ? this.query<InvestmentTransaction>('SELECT * FROM investment_transactions WHERE accountId = ? ORDER BY date DESC', [accountId])
+            : this.query<InvestmentTransaction>('SELECT * FROM investment_transactions ORDER BY date DESC');
+    }
+
+    async createInvestmentTransaction(txn: Omit<InvestmentTransaction, 'id' | 'createdAt'>): Promise<string> {
+        const id = crypto.randomUUID();
+        const now = new Date().toISOString();
+        await this.exec(
+            `INSERT INTO investment_transactions (id, accountId, type, date, quantity, pricePerUnit, amount, notes, createdAt)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [id, txn.accountId, txn.type, txn.date, txn.quantity ?? null, txn.pricePerUnit ?? null, txn.amount, txn.notes || null, now]
+        );
+        return id;
+    }
+
+    async deleteInvestmentTransaction(id: string): Promise<void> {
+        await this.exec('DELETE FROM investment_transactions WHERE id = ?', [id]);
+    }
+
+    // === DOCUMENT VAULT ===
+
+    async getDocuments(category?: FinanceDocument['category']): Promise<FinanceDocument[]> {
+        return category
+            ? this.query<FinanceDocument>('SELECT * FROM documents WHERE category = ? ORDER BY createdAt DESC', [category])
+            : this.query<FinanceDocument>('SELECT * FROM documents ORDER BY createdAt DESC');
+    }
+
+    async createDocument(doc: Omit<FinanceDocument, 'id' | 'createdAt'>): Promise<string> {
+        const id = crypto.randomUUID();
+        const now = new Date().toISOString();
+        await this.exec(
+            `INSERT INTO documents (id, category, name, filePath, expiryDate, notes, createdAt)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+            [id, doc.category, doc.name, doc.filePath, doc.expiryDate || null, doc.notes || null, now]
+        );
+        return id;
+    }
+
+    async deleteDocument(id: string): Promise<void> {
+        // Matches the existing receipt-deletion behavior elsewhere in this app:
+        // the row is removed, but the underlying blob is left in place rather
+        // than adding a new blob-delete worker message for this alone.
+        await this.exec('DELETE FROM documents WHERE id = ?', [id]);
+    }
+
+    // === CHALLENGES (gamification) ===
+
+    async getChallenges(): Promise<Challenge[]> {
+        return this.query<Challenge>('SELECT * FROM challenges ORDER BY createdAt DESC');
+    }
+
+    async createChallenge(challenge: Omit<Challenge, 'id' | 'createdAt' | 'status'>): Promise<string> {
+        const id = crypto.randomUUID();
+        const now = new Date().toISOString();
+        await this.exec(
+            `INSERT INTO challenges (id, type, target, startDate, endDate, status, createdAt)
+       VALUES (?, ?, ?, ?, ?, 'active', ?)`,
+            [id, challenge.type, challenge.target, challenge.startDate, challenge.endDate, now]
+        );
+        return id;
+    }
+
+    async updateChallengeStatus(id: string, status: Challenge['status']): Promise<void> {
+        await this.exec('UPDATE challenges SET status = ? WHERE id = ?', [status, id]);
+    }
+
+    async deleteChallenge(id: string): Promise<void> {
+        await this.exec('DELETE FROM challenges WHERE id = ?', [id]);
     }
 
     // === MEMORY (Phase 1) ===

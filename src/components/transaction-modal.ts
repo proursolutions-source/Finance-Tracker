@@ -2,7 +2,7 @@ import { db } from '../db';
 import { store } from '../stores';
 import { showToast } from './toast';
 import { showModal } from './modal';
-import { fileToArrayBuffer, getFileExtension, uuid, dateInputToISO } from '../utils';
+import { fileToArrayBuffer, getFileExtension, uuid, dateInputToISO, escapeHtml, isGenuineReceiptFile, MAX_RECEIPT_FILE_SIZE, formatBytes } from '../utils';
 import type { Transaction, Memory } from '../types';
 import { hasFeature } from '../cloud/entitlements';
 
@@ -60,7 +60,7 @@ export async function openTransactionModal(existingTransaction?: Transaction, on
         <option value="">Select category...</option>
         ${categories.map(cat => `
           <option value="${cat.id}" ${existingTransaction?.categoryId === cat.id ? 'selected' : ''}>
-            ${cat.icon ? cat.icon + ' ' : ''}${cat.name}
+            ${cat.icon ? cat.icon + ' ' : ''}${escapeHtml(cat.name)}
           </option>
         `).join('')}
       </select>
@@ -83,13 +83,13 @@ export async function openTransactionModal(existingTransaction?: Transaction, on
     <div>
       <label class="block text-sm font-medium mb-2">Payee (optional)</label>
       <input type="text" name="payee"
-        value="${existingTransaction?.payee || ''}"
+        value="${escapeHtml(existingTransaction?.payee)}"
         class="glass-input w-full" placeholder="e.g., Grocery Store">
     </div>
 
     <div>
       <label class="block text-sm font-medium mb-2">Notes (optional)</label>
-      <textarea name="notes" rows="2" class="glass-input w-full" placeholder="Add details...">${existingTransaction?.notes || ''}</textarea>
+      <textarea name="notes" rows="2" class="glass-input w-full" placeholder="Add details...">${escapeHtml(existingTransaction?.notes)}</textarea>
     </div>
 
     <div>
@@ -119,8 +119,8 @@ export async function openTransactionModal(existingTransaction?: Transaction, on
       </button>
       <div id="memory-fields" class="space-y-3 mt-3 ${existingMemory ? '' : 'hidden'}">
         <p class="text-xs text-slate-500">Memories are optional — a short story behind this expense, for your own "On This Day" and Timeline later.</p>
-        <input type="text" name="memoryTitle" value="${existingMemory?.title || ''}" class="glass-input w-full" placeholder="e.g., First coffee with my new team">
-        <textarea name="memoryBody" rows="2" class="glass-input w-full" placeholder="What made this memorable? (optional)">${existingMemory?.body || ''}</textarea>
+        <input type="text" name="memoryTitle" value="${escapeHtml(existingMemory?.title)}" class="glass-input w-full" placeholder="e.g., First coffee with my new team">
+        <textarea name="memoryBody" rows="2" class="glass-input w-full" placeholder="What made this memorable? (optional)">${escapeHtml(existingMemory?.body)}</textarea>
       </div>
     </div>
   `;
@@ -153,7 +153,7 @@ export async function openTransactionModal(existingTransaction?: Transaction, on
         select.innerHTML = `
       <option value="">None</option>
       ${accounts.map(a => `
-        <option value="${a.id}" ${existingTransaction?.accountId === a.id ? 'selected' : ''}>${a.name}</option>
+        <option value="${a.id}" ${existingTransaction?.accountId === a.id ? 'selected' : ''}>${escapeHtml(a.name)}</option>
       `).join('')}
     `;
     }).catch(() => { /* accounts are optional; ignore failures */ });
@@ -221,13 +221,22 @@ export async function openTransactionModal(existingTransaction?: Transaction, on
 
         try {
             const formData = new FormData(form);
+            const amount = parseFloat(formData.get('amount') as string);
+            // Backstop behind the input's HTML5 min="0" — never trust client
+            // constraint validation alone to keep bad data out of storage.
+            if (!Number.isFinite(amount) || amount <= 0) {
+                showToast('Enter a valid amount greater than 0', { type: 'error' });
+                return;
+            }
+            const payee = (formData.get('payee') as string || '').trim();
+            const notes = (formData.get('notes') as string || '').trim();
             const data: any = {
-                amount: parseFloat(formData.get('amount') as string),
+                amount,
                 type: formData.get('type') as 'income' | 'expense',
                 categoryId: formData.get('categoryId') as string,
                 date: dateInputToISO(formData.get('date') as string),
-                payee: (formData.get('payee') as string) || undefined,
-                notes: (formData.get('notes') as string) || undefined,
+                payee: payee || undefined,
+                notes: notes || undefined,
                 accountId: (formData.get('accountId') as string) || undefined,
             };
 
@@ -239,6 +248,14 @@ export async function openTransactionModal(existingTransaction?: Transaction, on
             }
 
             if (receiptFile && receiptFile.size > 0) {
+                if (receiptFile.size > MAX_RECEIPT_FILE_SIZE) {
+                    showToast(`Receipt is too large (max ${formatBytes(MAX_RECEIPT_FILE_SIZE)})`, { type: 'error' });
+                    return;
+                }
+                if (!(await isGenuineReceiptFile(receiptFile))) {
+                    showToast('That file doesn\'t look like a real image or PDF — please attach a genuine receipt photo or scan.', { type: 'error' });
+                    return;
+                }
                 receiptPath = `receipts/${uuid()}.${getFileExtension(receiptFile.name) || 'bin'}`;
                 const buffer = await fileToArrayBuffer(receiptFile);
                 await db.writeBlob(receiptPath, buffer);

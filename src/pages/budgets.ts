@@ -4,7 +4,7 @@
 
 import { db } from '../db';
 import { store } from '../stores';
-import { formatCurrency, getBudgetPercentage, getBudgetStatusColor } from '../utils';
+import { formatCurrency, getBudgetPercentage, getBudgetStatusColor, escapeHtml } from '../utils';
 import { showToast } from '../components/toast';
 import { showModal } from '../components/modal';
 import type { Budget } from '../types';
@@ -72,7 +72,7 @@ export async function renderBudgets(): Promise<void> {
                       <i data-lucide="${b.categoryIcon}" class="w-6 h-6"></i>
                     </div>
                     <div>
-                      <h3 class="font-bold text-lg">${b.categoryName}</h3>
+                      <h3 class="font-bold text-lg">${escapeHtml(b.categoryName)}</h3>
                       <p class="text-sm text-slate-400 capitalize">${b.period} Budget</p>
                     </div>
                   </div>
@@ -105,7 +105,7 @@ export async function renderBudgets(): Promise<void> {
                 ${b.notes ? `
                   <div class="mt-4 pt-4 border-t border-white/5 text-sm text-slate-400 flex items-start gap-2">
                     <i data-lucide="sticky-note" class="w-4 h-4 mt-0.5 opacity-50"></i>
-                    <p>${b.notes}</p>
+                    <p>${escapeHtml(b.notes)}</p>
                   </div>
                 ` : ''}
               </div>
@@ -195,7 +195,7 @@ function openBudgetModal(budget?: Budget): void {
         <option value="">Select category...</option>
         ${categories.map(c => `
           <option value="${c.id}" ${budget?.categoryId === c.id ? 'selected' : ''}>
-            ${c.name}
+            ${escapeHtml(c.name)}
           </option>
         `).join('')}
       </select>
@@ -233,7 +233,7 @@ function openBudgetModal(budget?: Budget): void {
 
     <div>
       <label class="block text-sm font-medium mb-1">Notes (Optional)</label>
-      <textarea name="notes" rows="2" class="glass-input w-full" placeholder="Add details...">${budget?.notes || ''}</textarea>
+      <textarea name="notes" rows="2" class="glass-input w-full" placeholder="Add details...">${escapeHtml(budget?.notes)}</textarea>
     </div>
   `;
 

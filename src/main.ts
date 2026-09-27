@@ -11,10 +11,16 @@ import { hasFeature } from './cloud/entitlements';
 import { showToast } from './components/toast';
 import { runNotificationChecks } from './notifications';
 import { initAppLock } from './components/lock-screen';
+import { initIdleTimeout } from './components/idle-timeout';
+import { initOfflineBanner } from './components/offline-banner';
+import { getFeatureFlags } from './cloud/growth';
+import { renderMaintenancePage, renderAccountSuspendedPage } from './pages/error-page';
+import { renderNavDrawer, toggleNavDrawer, revealAdminInDrawer, NAV_ITEMS, navLinkHtml } from './components/nav-drawer';
 import { requireAuth } from './components/auth-gate';
 import { requireCloudAuth, type CloudAuthResult } from './components/cloud-auth-required';
 import { showResetPasswordScreen } from './components/reset-password-screen';
 import { initPasswordRecoveryListener, getMyProfile } from './cloud/cloud-auth';
+import { logEvent } from './cloud/app-log';
 import { initCookieConsent } from './components/cookie-consent';
 import { initAnalytics, trackPageView } from './analytics';
 import './styles/main.css';
@@ -42,8 +48,20 @@ import { renderAdminDashboard } from './pages/admin/admin-dashboard';
 import { renderAdminUsers } from './pages/admin/admin-users';
 import { renderAdminPlans } from './pages/admin/admin-plans';
 import { renderAdminDiscounts } from './pages/admin/admin-discounts';
+import { renderAdminLogs } from './pages/admin/admin-logs';
+import { renderAdminSupport } from './pages/admin/admin-support';
+import { renderAdminOps } from './pages/admin/admin-ops';
+import { renderInvestments } from './pages/investments';
+import { renderDocuments } from './pages/documents';
+import { renderLoanTools } from './pages/loan-tools';
+import { renderMoneyTools } from './pages/money-tools';
+import { renderAchievements } from './pages/achievements';
+import { renderFeedback } from './pages/feedback';
+import { renderReferral } from './pages/referral';
+import { renderNotificationCenter } from './pages/notification-center';
+import { renderUnauthorized401, renderForbidden403, renderRateLimited429, renderServerError500 } from './pages/error-page';
 import { isCloudConfigured, isCurrentUserAdmin } from './cloud/cloud-auth';
-import { refreshEntitlement } from './cloud/entitlements';
+import { refreshEntitlement, setAdminCache } from './cloud/entitlements';
 
 /**
  * True only when the current URL is a Supabase password-reset redirect
@@ -74,11 +92,37 @@ async function handlePasswordRecoveryIfPresent(): Promise<CloudAuthResult | null
 }
 
 /**
+ * Best-effort client-error capture, registered at module load (before
+ * initApp() runs) so it catches errors during boot too, not just after.
+ * Gives the Admin Portal real visibility into runtime errors instead of only
+ * the browser console, which no one is watching in production.
+ */
+window.addEventListener('error', (event) => {
+  void logEvent('client_error', event.message || 'Uncaught error', {
+    source: event.filename,
+    line: event.lineno,
+    col: event.colno,
+    stack: event.error?.stack,
+  });
+});
+window.addEventListener('unhandledrejection', (event) => {
+  const reason = event.reason;
+  void logEvent('client_error', 'Unhandled promise rejection: ' + (reason?.message || String(reason)), {
+    stack: reason?.stack,
+  });
+});
+
+/**
  * Initialize the application
  */
 async function initApp(): Promise<void> {
   try {
     console.log('[App] Initializing MoneyFlow...');
+
+    // Independent of auth — shows even on the login screen, since that's
+    // exactly when a dropped connection is most confusing (sign-in just
+    // seems to silently fail otherwise).
+    initOfflineBanner();
 
     // Apply theme
     const theme = getTheme();
@@ -91,8 +135,41 @@ async function initApp(): Promise<void> {
     const recoveryAuth = await handlePasswordRecoveryIfPresent();
     const auth = recoveryAuth ?? (isCloudConfigured() ? await requireCloudAuth() : await requireAuth());
 
+    // Surfaced once, right after a fresh sign-in following an idle timeout —
+    // otherwise the forced logout looks like an unexplained silent kick.
+    try {
+        if (sessionStorage.getItem('moneyflow-session-expired')) {
+            sessionStorage.removeItem('moneyflow-session-expired');
+            showToast('You were signed out after a period of inactivity.', { type: 'info', duration: 6000 });
+        }
+    } catch { /* ignore */ }
+
+    // Maintenance mode / account suspension: both block the whole app, so
+    // they're checked before anything else loads. Admins bypass maintenance
+    // mode so they can still get in to turn it back off.
+    if (isCloudConfigured()) {
+        const [flags, isAdmin, profile] = await Promise.all([
+            getFeatureFlags().catch(() => ({} as Record<string, boolean>)),
+            isCurrentUserAdmin().catch(() => false),
+            getMyProfile().catch(() => null),
+        ]);
+        setAdminCache(isAdmin);
+        if ((flags.maintenance_mode && !isAdmin) || profile?.status === 'suspended') {
+            const loadingScreen = document.getElementById('loading-screen');
+            const appContainer = document.getElementById('app');
+            if (loadingScreen) loadingScreen.style.display = 'none';
+            if (appContainer) appContainer.classList.remove('hidden');
+            if (flags.maintenance_mode && !isAdmin) renderMaintenancePage();
+            else renderAccountSuspendedPage();
+            return;
+        }
+    }
+
     // Require PIN unlock (no-op if no PIN has been set)
     await initAppLock();
+
+    // Re-lock (or sign out) after a period of inactivity
+    initIdleTimeout();
 
     // Refresh the cached subscription tier used for feature gating. Runs
     // after auth so it has a signed-in cloud session to check; failures fall
@@ -158,11 +235,27 @@ async function initApp(): Promise<void> {
     router.register('/admin/users', renderAdminUsers);
     router.register('/admin/plans', renderAdminPlans);
     router.register('/admin/discounts', renderAdminDiscounts);
+    router.register('/admin/logs', renderAdminLogs);
+    router.register('/admin/support', renderAdminSupport);
+    router.register('/admin/ops', renderAdminOps);
     router.register('/settings', renderSettings);
+    router.register('/investments', renderInvestments);
+    router.register('/documents', renderDocuments);
+    router.register('/loan-tools', renderLoanTools);
+    router.register('/money-tools', renderMoneyTools);
+    router.register('/achievements', renderAchievements);
+    router.register('/feedback', renderFeedback);
+    router.register('/referral', renderReferral);
+    router.register('/notifications', renderNotificationCenter);
+    router.register('/401', renderUnauthorized401, false);
+    router.register('/403', renderForbidden403, false);
+    router.register('/429', renderRateLimited429, false);
+    router.register('/500', renderServerError500, false);
     router.setNotFoundHandler(renderNotFound);
 
     // Render navigation
     renderNavigation();
+    renderNavDrawer();
     revealAdminNavIfApplicable();
     mountAccountWidget();
 
@@ -208,6 +301,7 @@ async function revealAdminNavIfApplicable(): Promise<void> {
     const isAdmin = await isCurrentUserAdmin();
     if (isAdmin) {
       document.getElementById('admin-nav-link')?.classList.replace('hidden', 'flex');
+      revealAdminInDrawer();
     }
   } catch {
     // cloud not reachable / not signed in — leave the link hidden
@@ -224,63 +318,15 @@ function renderNavigation(): void {
     navContainer.innerHTML = `
       <div class="hidden md:flex fixed top-0 left-0 h-screen w-64 glass-card flex-col p-6 border-r border-white/10">
         <div class="mb-8">
-          <h1 class="text-2xl font-bold mb-1" style="font-family:'Poppins',sans-serif"><span class="text-white">Money</span><span class="text-primary-400">Flow</span></h1>
+          <div class="flex items-center gap-2 mb-1">
+            <img src="/icons/icon.svg" alt="" width="28" height="28">
+            <h1 class="text-2xl font-bold" style="font-family:'Poppins',sans-serif"><span class="text-white">Money</span><span class="text-primary-400">Flow</span></h1>
+          </div>
           <p class="text-xs text-primary-300 tracking-wide">Track Today &middot; A Better Tomorrow</p>
         </div>
         
-        <nav class="flex-1 space-y-2">
-          <a href="#/" class="nav-link flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-white/10 transition-colors">
-            <i data-lucide="layout-dashboard" class="w-5 h-5"></i>
-            <span>Dashboard</span>
-          </a>
-          <a href="#/budgets" class="nav-link flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-white/10 transition-colors">
-            <i data-lucide="pie-chart" class="w-5 h-5"></i>
-            <span>Budgets</span>
-          </a>
-          <a href="#/transactions" class="nav-link flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-white/10 transition-colors">
-            <i data-lucide="receipt" class="w-5 h-5"></i>
-            <span>Transactions</span>
-          </a>
-          <a href="#/networth" class="nav-link flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-white/10 transition-colors">
-            <i data-lucide="wallet" class="w-5 h-5"></i>
-            <span>Net Worth</span>
-            ${!hasFeature('networth') ? getIcon('lock', 14, 'ml-auto text-slate-500') : ''}
-          </a>
-          <a href="#/recurring" class="nav-link flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-white/10 transition-colors">
-            <i data-lucide="refresh-cw" class="w-5 h-5"></i>
-            <span>Recurring</span>
-            ${!hasFeature('recurring') ? getIcon('lock', 14, 'ml-auto text-slate-500') : ''}
-          </a>
-          <a href="#/lending" class="nav-link flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-white/10 transition-colors">
-            <i data-lucide="handshake" class="w-5 h-5"></i>
-            <span>Lending & Debt</span>
-            ${!hasFeature('lending') ? getIcon('lock', 14, 'ml-auto text-slate-500') : ''}
-          </a>
-          <a href="#/categories" class="nav-link flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-white/10 transition-colors">
-            <i data-lucide="tag" class="w-5 h-5"></i>
-            <span>Categories</span>
-          </a>
-          <a href="#/goals" class="nav-link flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-white/10 transition-colors">
-            <i data-lucide="award" class="w-5 h-5"></i>
-            <span>Goals</span>
-          </a>
-          <a href="#/memory" class="nav-link flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-white/10 transition-colors">
-            <i data-lucide="sparkles" class="w-5 h-5"></i>
-            <span>Memory</span>
-            ${!hasFeature('memory') ? getIcon('lock', 14, 'ml-auto text-slate-500') : ''}
-          </a>
-          <a href="#/reports" class="nav-link flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-white/10 transition-colors">
-            <i data-lucide="bar-chart-3" class="w-5 h-5"></i>
-            <span>Reports</span>
-          </a>
-          <a href="#/reminders" class="nav-link flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-white/10 transition-colors">
-            <i data-lucide="bell" class="w-5 h-5"></i>
-            <span>Reminders</span>
-          </a>
-          <a href="#/subscription" class="nav-link flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-white/10 transition-colors">
-            <i data-lucide="credit-card" class="w-5 h-5"></i>
-            <span>Subscription</span>
-          </a>
+        <nav class="flex-1 space-y-2 overflow-y-auto custom-scrollbar">
+          ${NAV_ITEMS.map(item => navLinkHtml(item)).join('')}
           <a href="#/admin" id="admin-nav-link" class="nav-link hidden items-center gap-3 px-4 py-3 rounded-lg hover:bg-white/10 transition-colors">
             <i data-lucide="shield" class="w-5 h-5"></i>
             <span>Admin Portal</span>
@@ -301,38 +347,39 @@ function renderNavigation(): void {
   const bottomNav = document.getElementById('bottom-nav');
   if (bottomNav) {
     bottomNav.innerHTML = `
-      <div class="flex items-center justify-around py-2">
-        <a href="#/" class="nav-link flex flex-col items-center gap-1 px-4 py-2 text-slate-400 hover:text-white transition-colors">
-          <i data-lucide="layout-dashboard" class="w-6 h-6"></i>
-          <span class="text-xs">Home</span>
+      <div class="flex items-center py-2">
+        <a href="#/" class="nav-link flex-1 min-w-0 flex flex-col items-center gap-1 px-1 py-2 text-slate-400 hover:text-white transition-colors">
+          <i data-lucide="layout-dashboard" class="w-5 h-5"></i>
+          <span class="text-[10px] truncate w-full text-center">Home</span>
         </a>
-        <a href="#/transactions" class="nav-link flex flex-col items-center gap-1 px-4 py-2 text-slate-400 hover:text-white transition-colors">
-          <i data-lucide="receipt" class="w-6 h-6"></i>
-          <span class="text-xs">Transactions</span>
+        <a href="#/transactions" class="nav-link flex-1 min-w-0 flex flex-col items-center gap-1 px-1 py-2 text-slate-400 hover:text-white transition-colors">
+          <i data-lucide="receipt" class="w-5 h-5"></i>
+          <span class="text-[10px] truncate w-full text-center">Transactions</span>
         </a>
-        <a href="#/budgets" class="nav-link flex flex-col items-center gap-1 px-4 py-2 text-slate-400 hover:text-white transition-colors">
-          <i data-lucide="pie-chart" class="w-6 h-6"></i>
-          <span class="text-xs">Budgets</span>
+        <a href="#/budgets" class="nav-link flex-1 min-w-0 flex flex-col items-center gap-1 px-1 py-2 text-slate-400 hover:text-white transition-colors">
+          <i data-lucide="pie-chart" class="w-5 h-5"></i>
+          <span class="text-[10px] truncate w-full text-center">Budgets</span>
         </a>
-        <a href="#/goals" class="nav-link flex flex-col items-center gap-1 px-4 py-2 text-slate-400 hover:text-white transition-colors">
-          <i data-lucide="award" class="w-6 h-6"></i>
-          <span class="text-xs">Goals</span>
+        <a href="#/goals" class="nav-link flex-1 min-w-0 flex flex-col items-center gap-1 px-1 py-2 text-slate-400 hover:text-white transition-colors">
+          <i data-lucide="award" class="w-5 h-5"></i>
+          <span class="text-[10px] truncate w-full text-center">Goals</span>
         </a>
-        <a href="#/memory" class="nav-link relative flex flex-col items-center gap-1 px-4 py-2 text-slate-400 hover:text-white transition-colors">
-          <i data-lucide="sparkles" class="w-6 h-6"></i>
-          ${!hasFeature('memory') ? `<span class="absolute top-0 right-2">${getIcon('lock', 10, 'text-slate-500')}</span>` : ''}
-          <span class="text-xs">Memory</span>
+        <a href="#/memory" class="nav-link relative flex-1 min-w-0 flex flex-col items-center gap-1 px-1 py-2 text-slate-400 hover:text-white transition-colors">
+          <i data-lucide="sparkles" class="w-5 h-5"></i>
+          ${!hasFeature('memory') ? `<span class="absolute top-0 right-1/4">${getIcon('lock', 10, 'text-slate-500')}</span>` : ''}
+          <span class="text-[10px] truncate w-full text-center">Memory</span>
         </a>
-        <a href="#/reports" class="nav-link flex flex-col items-center gap-1 px-4 py-2 text-slate-400 hover:text-white transition-colors">
-          <i data-lucide="bar-chart-3" class="w-6 h-6"></i>
-          <span class="text-xs">Reports</span>
+        <a href="#/reports" class="nav-link flex-1 min-w-0 flex flex-col items-center gap-1 px-1 py-2 text-slate-400 hover:text-white transition-colors">
+          <i data-lucide="bar-chart-3" class="w-5 h-5"></i>
+          <span class="text-[10px] truncate w-full text-center">Reports</span>
         </a>
-        <a href="#/settings" class="nav-link flex flex-col items-center gap-1 px-4 py-2 text-slate-400 hover:text-white transition-colors">
-          <i data-lucide="settings" class="w-6 h-6"></i>
-          <span class="text-xs">More</span>
-        </a>
+        <button id="bottom-nav-menu-btn" class="flex-1 min-w-0 flex flex-col items-center gap-1 px-1 py-2 text-slate-400 hover:text-white transition-colors">
+          <i data-lucide="menu" class="w-5 h-5"></i>
+          <span class="text-[10px] truncate w-full text-center">Menu</span>
+        </button>
       </div>
     `;
+    bottomNav.querySelector('#bottom-nav-menu-btn')?.addEventListener('click', toggleNavDrawer);
   }
 
   // Initialize icons

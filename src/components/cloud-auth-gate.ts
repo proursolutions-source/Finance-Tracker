@@ -82,6 +82,10 @@ export function renderCloudAuthGate(container: HTMLElement, opts: { title: strin
               <label class="block text-sm font-medium mb-1">Full Name</label>
               <input type="text" name="fullName" required class="glass-input w-full">
             </div>
+            <div>
+              <label class="block text-sm font-medium mb-1">Referral code (optional)</label>
+              <input type="text" name="referralCode" class="glass-input w-full uppercase" placeholder="e.g., AB12CD">
+            </div>
           ` : ''}
           <div>
             <label class="block text-sm font-medium mb-1">Email</label>
@@ -156,6 +160,11 @@ export function renderCloudAuthGate(container: HTMLElement, opts: { title: strin
                         return;
                     }
                     showToast('Cloud account created', { type: 'success' });
+                    const referralCode = (formData.get('referralCode') as string || '').trim();
+                    if (referralCode) {
+                        const { redeemReferralCode } = await import('../cloud/growth');
+                        await redeemReferralCode(referralCode).catch(() => { /* best-effort, never blocks signup */ });
+                    }
                 } else {
                     try {
                         await signInCloud(email, password);

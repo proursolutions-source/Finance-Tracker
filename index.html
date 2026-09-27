@@ -2,13 +2,21 @@
 <html lang="en-IN">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="description" content="MoneyFlow is a privacy-first personal finance tracker for tracking income, expenses, budgets, debts, and financial goals — with your data kept on your own device.">
   <meta name="theme-color" content="#0ea5e9">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 
   <title>MoneyFlow — Personal Finance Tracker</title>
+
+  <!-- Canonical URL: set at runtime to the current origin, since this app has
+       no fixed production domain yet — a hardcoded one would be wrong in every
+       environment except the eventual real deployment. -->
+  <link rel="canonical" id="canonical-link">
+  <script>
+    document.getElementById('canonical-link').href = window.location.origin + window.location.pathname;
+  </script>
 
   <!-- Open Graph / social preview -->
   <meta property="og:type" content="website">
@@ -28,6 +36,7 @@
   <link rel="manifest" href="/manifest.json">
 
   <!-- Favicon -->
+  <link rel="icon" type="image/svg+xml" href="/icons/icon.svg">
   <link rel="icon" type="image/png" sizes="16x16" href="/icons/icon-16x16.png">
   <link rel="icon" type="image/png" sizes="32x32" href="/icons/icon-32x32.png">
   <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
@@ -57,10 +66,97 @@
 <body class="bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 min-h-screen text-white">
   
   <!-- Loading Screen -->
+  <!-- Inlined as plain HTML/CSS (not the TS animated-loader component) since
+       this paints before any JS module has loaded -- src/components/
+       animated-loader.ts's injectStyles() mirrors these same class names
+       and keyframes so this hand-off looks identical once the app takes over. -->
+  <style>
+    #boot-loader { width: 96px; height: 96px; position: relative; display: inline-grid; place-items: center; }
+    #boot-loader::before {
+      content: ""; position: absolute; inset: 4%; border-radius: 50%;
+      background: radial-gradient(circle at 50% 45%, #101c35 0%, #080e1d 72%);
+      box-shadow: 0 0 35px rgba(32,184,255,.12), inset 0 0 25px rgba(32,184,255,.08);
+    }
+    #boot-loader svg { width: 100%; height: 100%; position: relative; z-index: 2; overflow: visible; }
+    #boot-loader .mf-track { fill: none; stroke: #17355e; stroke-width: 7; }
+    #boot-loader .mf-progress {
+      fill: none; stroke: url(#boot-loader-blue); stroke-width: 7; stroke-linecap: round;
+      stroke-dasharray: 490; stroke-dashoffset: 490;
+      transform: rotate(-90deg); transform-origin: 90px 90px;
+      animation: mf-ring 2.8s cubic-bezier(.65,0,.35,1) infinite;
+      filter: url(#boot-loader-glow);
+    }
+    #boot-loader .mf-bar { fill: url(#boot-loader-bar); transform-box: fill-box; transform-origin: bottom center; }
+    #boot-loader .mf-b1 { animation: mf-bar1 2.8s cubic-bezier(.65,0,.35,1) infinite; }
+    #boot-loader .mf-b2 { animation: mf-bar2 2.8s cubic-bezier(.65,0,.35,1) infinite; }
+    #boot-loader .mf-b3 { animation: mf-bar3 2.8s cubic-bezier(.65,0,.35,1) infinite; }
+    #boot-loader .mf-dot { fill: #20b8ff; filter: url(#boot-loader-glow); }
+    #boot-loader .mf-base1 { animation: mf-dot1 2.8s ease-in-out infinite; }
+    #boot-loader .mf-base2 { animation: mf-dot2 2.8s ease-in-out infinite; }
+    #boot-loader .mf-base3 { animation: mf-dot3 2.8s ease-in-out infinite; }
+    #boot-loader .mf-pointer-dot { animation: mf-pointerDot 2.8s ease-in-out infinite; }
+    #boot-loader .mf-pointer {
+      fill: none; stroke: #20b8ff; stroke-width: 8; stroke-linecap: round; stroke-linejoin: round;
+      stroke-dasharray: 160; stroke-dashoffset: 160;
+      animation: mf-pointer 2.8s cubic-bezier(.65,0,.35,1) infinite;
+      filter: url(#boot-loader-glow);
+    }
+    #boot-loader .mf-arrow {
+      fill: none; stroke: #20b8ff; stroke-width: 8; stroke-linecap: round; stroke-linejoin: round;
+      stroke-dasharray: 70; stroke-dashoffset: 70;
+      animation: mf-arrow 2.8s cubic-bezier(.65,0,.35,1) infinite;
+      filter: url(#boot-loader-glow);
+    }
+    @keyframes mf-ring { 0%,8% { stroke-dashoffset: 490; } 78%,90% { stroke-dashoffset: 0; } 100% { stroke-dashoffset: 490; } }
+    @keyframes mf-bar1 { 0%,12% { transform: scaleY(.08); } 30%,88% { transform: scaleY(1); } 100% { transform: scaleY(.08); } }
+    @keyframes mf-bar2 { 0%,20% { transform: scaleY(.08); } 38%,88% { transform: scaleY(1); } 100% { transform: scaleY(.08); } }
+    @keyframes mf-bar3 { 0%,28% { transform: scaleY(.08); } 46%,88% { transform: scaleY(1); } 100% { transform: scaleY(.08); } }
+    @keyframes mf-pointer { 0%,34% { stroke-dashoffset: 160; } 58%,88% { stroke-dashoffset: 0; } 100% { stroke-dashoffset: 160; } }
+    @keyframes mf-arrow { 0%,48% { stroke-dashoffset: 70; } 68%,88% { stroke-dashoffset: 0; } 100% { stroke-dashoffset: 70; } }
+    @keyframes mf-dot1 { 0%,20% { r: 5; } 28%,88% { r: 3.5; } 100% { r: 5; } }
+    @keyframes mf-dot2 { 0%,26% { r: 5; } 34%,88% { r: 3.5; } 100% { r: 5; } }
+    @keyframes mf-dot3 { 0%,32% { r: 5; } 40%,88% { r: 3.5; } 100% { r: 5; } }
+    @keyframes mf-pointerDot { 0%,34% { opacity: 1; transform: translate(0,0); } 58%,88% { opacity: .15; transform: translate(0,-3px); } 100% { opacity: 1; transform: translate(0,0); } }
+    @media (prefers-reduced-motion: reduce) {
+      #boot-loader .mf-progress, #boot-loader .mf-bar, #boot-loader .mf-dot, #boot-loader .mf-pointer, #boot-loader .mf-arrow, #boot-loader .mf-pointer-dot { animation: none !important; }
+    }
+  </style>
   <div id="loading-screen" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900">
     <div class="text-center">
-      <div class="inline-block animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-primary-500 mb-4"></div>
-      <h2 class="text-2xl font-bold mb-1" style="font-family:'Poppins',sans-serif"><span class="text-white">Money</span><span class="text-primary-400">Flow</span></h2>
+      <div id="boot-loader" class="mb-4" role="status" aria-label="Loading">
+        <svg viewBox="0 0 180 180" aria-hidden="true">
+          <defs>
+            <linearGradient id="boot-loader-blue" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0%" stop-color="#168ff0"/>
+              <stop offset="55%" stop-color="#20b8ff"/>
+              <stop offset="100%" stop-color="#55d2ff"/>
+            </linearGradient>
+            <linearGradient id="boot-loader-bar" x1="0" y1="1" x2="0" y2="0">
+              <stop offset="0%" stop-color="#168ff0"/>
+              <stop offset="100%" stop-color="#25c0ff"/>
+            </linearGradient>
+            <filter id="boot-loader-glow" x="-80%" y="-80%" width="260%" height="260%">
+              <feGaussianBlur stdDeviation="3" result="blur"/>
+              <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+            </filter>
+          </defs>
+          <circle class="mf-track" cx="90" cy="90" r="78"/>
+          <circle class="mf-progress" cx="90" cy="90" r="78"/>
+          <circle class="mf-dot mf-base1" cx="55" cy="130" r="5"/>
+          <circle class="mf-dot mf-base2" cx="90" cy="130" r="5"/>
+          <circle class="mf-dot mf-base3" cx="125" cy="130" r="5"/>
+          <rect class="mf-bar mf-b1" x="49" y="91" width="12" height="39" rx="3"/>
+          <rect class="mf-bar mf-b2" x="84" y="72" width="12" height="58" rx="3"/>
+          <rect class="mf-bar mf-b3" x="119" y="52" width="12" height="78" rx="3"/>
+          <circle class="mf-dot mf-pointer-dot" cx="70" cy="73" r="5"/>
+          <path class="mf-pointer" d="M70 73 L91 56 L111 64 L132 43"/>
+          <path class="mf-arrow" d="M120 43 H132 V55"/>
+        </svg>
+      </div>
+      <div class="flex items-center justify-center gap-2 mb-1">
+        <img src="/icons/icon.svg" alt="" width="28" height="28">
+        <h2 class="text-2xl font-bold" style="font-family:'Poppins',sans-serif"><span class="text-white">Money</span><span class="text-primary-400">Flow</span></h2>
+      </div>
       <p class="text-xs text-primary-300 mb-3 tracking-wide">Track Today &middot; A Better Tomorrow</p>
       <p class="text-slate-400">Loading your financial data...</p>
     </div>
@@ -72,19 +168,27 @@
     <nav id="nav-container"></nav>
 
     <!-- Account widget (avatar + dropdown), persistent across every page -->
-    <div id="account-widget-container" class="fixed top-4 right-4 z-40"></div>
+    <div id="account-widget-container" class="fixed top-4 right-4 z-40" style="margin-top: env(safe-area-inset-top);"></div>
+
+    <!-- The side nav drawer itself is opened from the bottom nav's "Menu"
+         button (mobile) — no separate top-left toggle, to avoid a redundant
+         second menu control on the same screen. -->
+    <div id="nav-drawer-container"></div>
     
     <!-- Main Content -->
     <!-- md:ml-64 offsets past the fixed desktop sidebar (w-64); each page's
          own inner wrapper (e.g. max-w-4xl mx-auto) handles centering within
          this remaining space - this element must NOT also center itself
          with container/mx-auto, or its content re-overlaps the sidebar. -->
-    <main id="main-content" class="p-4 pb-24 md:pb-4 md:ml-64">
+    <main id="main-content" class="p-4 pt-16 md:pt-4 pb-24 md:pb-4 md:ml-64">
       <!-- Page content will be rendered here -->
     </main>
     
     <!-- Bottom Navigation (Mobile) -->
-    <div id="bottom-nav" class="fixed bottom-0 left-0 right-0 md:hidden bg-slate-900/80 backdrop-blur-md border-t border-white/10">
+    <!-- pb-[env(safe-area-inset-bottom)] keeps the nav clear of a phone's own
+         gesture bar/home indicator, which otherwise overlaps or visually
+         swallows this fixed bar on notched/gesture-nav devices. -->
+    <div id="bottom-nav" class="fixed bottom-0 left-0 right-0 md:hidden bg-slate-900/80 backdrop-blur-md border-t border-white/10" style="padding-bottom: env(safe-area-inset-bottom);">
       <!-- Mobile nav will be injected here -->
     </div>
   </div>

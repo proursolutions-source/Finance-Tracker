@@ -11,28 +11,30 @@ export default {
                 sans: ['Poppins', 'Inter', 'system-ui', 'sans-serif'],
             },
             colors: {
-                // Brand palette
+                // Brand palette — aligned to the Money Flow brand spec
+                // (#00C2FF primary / #0099FF secondary / #0F1B2D navy), with
+                // the surrounding shades of the ramp adjusted to stay smooth.
                 primary: {
-                    50: '#f0f9ff',
-                    100: '#e0f2fe',
-                    200: '#bae6fd',
-                    300: '#93c5fd', // Accent
-                    400: '#38bdf8', // Light Blue
-                    500: '#0ea5e9', // Primary Blue
-                    600: '#0284c7',
-                    700: '#0369a1',
-                    800: '#075985',
-                    900: '#0c4a6e',
-                    950: '#0b1020', // Primary Dark
+                    50: '#f0faff',
+                    100: '#e0f6ff',
+                    200: '#b9edff',
+                    300: '#7ddcff',
+                    400: '#00c2ff', // Primary Blue (brand)
+                    500: '#0099ff', // Secondary Blue (brand)
+                    600: '#0077cc',
+                    700: '#005a9e',
+                    800: '#064571',
+                    900: '#0c3252',
+                    950: '#0f1b2d', // Dark Navy (brand)
                 },
                 brand: {
-                    dark: '#0b1020',
-                    blue: '#0ea5e9',
-                    lightBlue: '#38bdf8',
-                    accent: '#93c5fd',
+                    dark: '#0f1b2d',
+                    blue: '#0099ff',
+                    lightBlue: '#00c2ff',
+                    accent: '#7ddcff',
                 },
-                income: '#22c55e', // Success
-                expense: '#ef4444', // Alert
+                income: '#10d39f', // Success (brand)
+                expense: '#ff4d4f', // Error (brand)
             },
             backdropBlur: {
                 xs: '2px',

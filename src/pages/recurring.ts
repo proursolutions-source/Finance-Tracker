@@ -3,7 +3,7 @@
  */
 
 import { db } from '../db';
-import { formatCurrency, getIcon } from '../utils';
+import { formatCurrency, getIcon, escapeHtml } from '../utils';
 import { showToast } from '../components/toast';
 import { showModal } from '../components/modal';
 import { withTierGate } from '../components/upgrade-gate';
@@ -156,10 +156,10 @@ function renderRecurringCard(r: any, categories: any[], today: string): string {
           ${getIcon(r.isSubscription ? 'credit-card' : (r.type === 'income' ? 'arrow-down-left' : 'arrow-up-right'), 18)}
         </div>
         <div class="min-w-0">
-          <p class="font-medium text-white truncate">${r.name}</p>
+          <p class="font-medium text-white truncate">${escapeHtml(r.name)}</p>
           <div class="flex items-center gap-2 text-xs">
             <span class="px-2 py-0.5 rounded-full" style="background:${freqColor}20;color:${freqColor}">${FREQUENCY_LABELS[r.frequency]}</span>
-            ${cat ? `<span class="text-gray-500">${cat.name}</span>` : ''}
+            ${cat ? `<span class="text-gray-500">${escapeHtml(cat.name)}</span>` : ''}
             ${isDue ? `<span class="text-amber-400 font-medium">⚡ Due</span>` : `<span class="text-gray-500">Next: ${r.nextDueDate}</span>`}
           </div>
         </div>
@@ -184,7 +184,7 @@ async function openRecurringModal(categories: any[], existing?: any): Promise<vo
       <h3 class="text-lg font-semibold text-white">${isEdit ? 'Edit Recurring' : 'Add Recurring'}</h3>
       <div>
         <label class="block text-sm text-gray-400 mb-1">Name *</label>
-        <input type="text" id="rec-name" class="w-full px-4 py-3 rounded-xl bg-white/10 border border-white/20 text-white" value="${existing?.name || ''}" placeholder="e.g., Jio Recharge">
+        <input type="text" id="rec-name" class="w-full px-4 py-3 rounded-xl bg-white/10 border border-white/20 text-white" value="${escapeHtml(existing?.name)}" placeholder="e.g., Jio Recharge">
       </div>
       <div class="grid grid-cols-2 gap-3">
         <div>
@@ -210,7 +210,7 @@ async function openRecurringModal(categories: any[], existing?: any): Promise<vo
           <label class="block text-sm text-gray-400 mb-1">Category</label>
           <select id="rec-cat" class="w-full px-4 py-3 rounded-xl bg-white/10 border border-white/20 text-white">
             <option value="">None</option>
-            ${categories.map((c: any) => `<option value="${c.id}" ${existing?.categoryId === c.id ? 'selected' : ''}>${c.name}</option>`).join('')}
+            ${categories.map((c: any) => `<option value="${c.id}" ${existing?.categoryId === c.id ? 'selected' : ''}>${escapeHtml(c.name)}</option>`).join('')}
           </select>
         </div>
       </div>
@@ -230,7 +230,7 @@ async function openRecurringModal(categories: any[], existing?: any): Promise<vo
       </label>
       <div>
         <label class="block text-sm text-gray-400 mb-1">Notes</label>
-        <textarea id="rec-notes" class="w-full px-4 py-3 rounded-xl bg-white/10 border border-white/20 text-white" rows="2">${existing?.notes || ''}</textarea>
+        <textarea id="rec-notes" class="w-full px-4 py-3 rounded-xl bg-white/10 border border-white/20 text-white" rows="2">${escapeHtml(existing?.notes)}</textarea>
       </div>
       <div class="flex gap-3 pt-2">
         <button id="save-recurring" class="flex-1 py-3 rounded-xl bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white font-semibold">${isEdit ? 'Update' : 'Add'}</button>

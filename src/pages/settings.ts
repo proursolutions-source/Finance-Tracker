@@ -4,7 +4,7 @@
 
 import { db } from '../db';
 import { store } from '../stores';
-import { formatBytes, getStorageEstimate, downloadBlob, requestNotificationPermission } from '../utils';
+import { formatBytes, getStorageEstimate, downloadBlob, requestNotificationPermission, escapeHtml } from '../utils';
 import { showToast } from '../components/toast';
 import { showModal, showConfirm } from '../components/modal';
 import { isPinSet, setPin, removePin, verifyPin } from '../components/lock-screen';
@@ -12,6 +12,7 @@ import { getConsentChoice, setConsentChoice } from '../components/cookie-consent
 import { initAnalytics } from '../analytics';
 import { startTour } from '../components/product-tour';
 import { signOutCloud, isCloudConfigured, changePasswordCloud } from '../cloud/cloud-auth';
+import { requestAccountDeletion } from '../cloud/growth';
 import type { UserProfile } from '../types';
 
 export async function renderSettings(): Promise<void> {
@@ -32,11 +33,11 @@ export async function renderSettings(): Promise<void> {
           <div class="space-y-3">
             <div class="flex justify-between py-2 border-b border-white/5">
               <span class="text-slate-400">Name</span>
-              <span class="font-medium">${profile?.fullName || 'Not set'}</span>
+              <span class="font-medium">${escapeHtml(profile?.fullName) || 'Not set'}</span>
             </div>
             <div class="flex justify-between py-2 border-b border-white/5">
               <span class="text-slate-400">Location</span>
-              <span class="font-medium">${profile?.city}, ${profile?.country}</span>
+              <span class="font-medium">${escapeHtml(profile?.city)}, ${escapeHtml(profile?.country)}</span>
             </div>
             <div class="flex justify-between py-2 border-b border-white/5">
               <span class="text-slate-400">Currency</span>
@@ -55,10 +56,17 @@ export async function renderSettings(): Promise<void> {
         <!-- Help -->
         <div class="glass-card p-6 mb-6">
           <h2 class="text-xl font-bold mb-4">Help</h2>
-          <div class="flex gap-3">
+          <div class="flex gap-3 flex-wrap">
             <button id="replay-tour-btn" class="glass-button-secondary flex-1">Take the Tour</button>
             <a href="/guide.html" target="_blank" class="glass-button-secondary flex-1 text-center">Feature Guide</a>
+            <a href="/faq.html" target="_blank" class="glass-button-secondary flex-1 text-center">FAQ</a>
           </div>
+          ${isCloudConfigured() ? `
+          <div class="flex gap-3 flex-wrap mt-3">
+            <a href="#/feedback" class="glass-button-secondary flex-1 text-center">Feedback &amp; Support</a>
+            <a href="#/referral" class="glass-button-secondary flex-1 text-center">Referrals</a>
+          </div>
+          ` : ''}
         </div>
 
         <!-- Appearance -->
@@ -126,11 +134,27 @@ export async function renderSettings(): Promise<void> {
               <button id="consent-decline-btn" class="glass-button-secondary text-sm px-3 py-1.5">Decline</button>
             </div>
           </div>
-          <div class="flex gap-4 text-sm pt-2">
+          <div class="flex flex-wrap gap-4 text-sm pt-2">
             <a href="/privacy.html" target="_blank" class="text-primary-400 hover:underline">Privacy Policy</a>
             <a href="/terms.html" target="_blank" class="text-primary-400 hover:underline">Terms & Conditions</a>
+            <a href="/cookie-policy.html" target="_blank" class="text-primary-400 hover:underline">Cookie Policy</a>
+            <a href="/disclaimers.html" target="_blank" class="text-primary-400 hover:underline">Disclaimers</a>
           </div>
         </div>
+
+        ${isCloudConfigured() ? `
+        <!-- Account -->
+        <div class="glass-card p-6 mb-6">
+          <h2 class="text-xl font-bold mb-4">Account</h2>
+          <div class="flex justify-between items-center py-2">
+            <div>
+              <p class="font-medium">Delete Account</p>
+              <p class="text-xs text-slate-400">Requests permanent deletion — an admin processes this manually.</p>
+            </div>
+            <button id="request-deletion-btn" class="glass-button-secondary text-sm px-3 py-1.5 text-red-400">Request Deletion</button>
+          </div>
+        </div>
+        ` : ''}
 
         <!-- Storage -->
         <div class="glass-card p-6 mb-6">
@@ -197,6 +221,21 @@ export async function renderSettings(): Promise<void> {
             });
         });
         document.getElementById('change-password-btn')?.addEventListener('click', () => openChangePasswordModal());
+        document.getElementById('request-deletion-btn')?.addEventListener('click', () => {
+            showConfirm(
+                'Request Account Deletion',
+                'This submits a request for an admin to permanently delete your MoneyFlow Cloud account and data. This cannot be undone once processed.',
+                async () => {
+                    try {
+                        await requestAccountDeletion();
+                        showToast('Deletion request submitted', { type: 'success' });
+                    } catch (error) {
+                        console.error(error);
+                        showToast('Failed to submit request', { type: 'error' });
+                    }
+                }
+            );
+        });
         document.getElementById('export-csv-btn')?.addEventListener('click', exportTransactionsAsCSV);
         document.getElementById('export-json-btn')?.addEventListener('click', exportAllDataAsJSON);
         document.getElementById('reset-data-btn')?.addEventListener('click', resetAllData);
@@ -308,16 +347,16 @@ function openEditProfileModal(profile: Readonly<UserProfile> | null): void {
     form.innerHTML = `
     <div>
       <label class="block text-sm font-medium mb-1">Full Name</label>
-      <input type="text" name="fullName" value="${profile?.fullName || ''}" class="glass-input w-full" placeholder="Your name">
+      <input type="text" name="fullName" value="${escapeHtml(profile?.fullName)}" class="glass-input w-full" placeholder="Your name">
     </div>
     <div class="grid grid-cols-2 gap-4">
       <div>
         <label class="block text-sm font-medium mb-1">City</label>
-        <input type="text" name="city" value="${profile?.city || ''}" class="glass-input w-full">
+        <input type="text" name="city" value="${escapeHtml(profile?.city)}" class="glass-input w-full">
       </div>
       <div>
         <label class="block text-sm font-medium mb-1">Country</label>
-        <input type="text" name="country" value="${profile?.country || ''}" class="glass-input w-full">
+        <input type="text" name="country" value="${escapeHtml(profile?.country)}" class="glass-input w-full">
       </div>
     </div>
     <div>

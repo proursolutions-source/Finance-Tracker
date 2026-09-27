@@ -25,6 +25,19 @@ export interface Category {
     budget?: number;
     hidden: boolean;
     color?: string;
+    /** Untagged (undefined) categories are excluded from fixed/variable and essential/non-essential breakdowns. */
+    isEssential?: boolean;
+    isFixed?: boolean;
+}
+
+export interface Challenge {
+    id: string;
+    type: 'no-spend-days' | 'savings-target' | 'budget-adherence';
+    target: number;
+    startDate: string;
+    endDate: string;
+    status: 'active' | 'completed' | 'failed';
+    createdAt: string;
 }
 
 export interface Budget {
@@ -244,6 +257,34 @@ export interface LendingPayment {
     lendingId: string;
     amount: number;
     date: string; // ISO 8601
+    notes?: string;
+    createdAt: string;
+}
+
+// Manual investment ledger against an investment-type Account (mutual-fund/
+// stocks/gold/property). No live market-data feed — the account's own
+// `balance` remains a manually-updated valuation; this is purely a history of
+// buy/sell/dividend events for that holding.
+export interface InvestmentTransaction {
+    id: string;
+    accountId: string;
+    type: 'buy' | 'sell' | 'dividend' | 'other';
+    date: string; // ISO 8601
+    quantity?: number;
+    pricePerUnit?: number;
+    amount: number;
+    notes?: string;
+    createdAt: string;
+}
+
+// Document Vault — insurance/tax/loan documents, stored as a local blob the
+// same way transaction receipts already are (see db.writeBlob/readBlob).
+export interface FinanceDocument {
+    id: string;
+    category: 'insurance' | 'tax' | 'loan' | 'other';
+    name: string;
+    filePath: string;
+    expiryDate?: string;
     notes?: string;
     createdAt: string;
 }

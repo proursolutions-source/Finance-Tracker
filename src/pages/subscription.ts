@@ -6,11 +6,12 @@
  */
 import { isCloudConfigured, getCloudUser } from '../cloud/cloud-auth';
 import { renderCloudAuthGate } from '../components/cloud-auth-gate';
-import { listPlans, getMySubscription, subscribeToPlan, cancelMySubscription, validateDiscountCode, getPaymentSettings } from '../cloud/cloud-db';
+import { listPlans, getMySubscription, subscribeToPlan, cancelMySubscription, validateDiscountCode, getPaymentSettings, uploadPaymentScreenshot } from '../cloud/cloud-db';
 import { refreshEntitlement } from '../cloud/entitlements';
-import { formatCurrency, getIcon } from '../utils';
+import { formatCurrency, getIcon, escapeHtml, isGenuineReceiptFile, MAX_RECEIPT_FILE_SIZE, formatBytes } from '../utils';
 import { showToast } from '../components/toast';
 import { showConfirm } from '../components/modal';
+import { renderAnimatedLoader } from '../components/animated-loader';
 import type { SubscriptionPlan } from '../cloud/types';
 
 export async function renderSubscription(): Promise<void> {
@@ -19,6 +20,7 @@ export async function renderSubscription(): Promise<void> {
 
     mainContent.innerHTML = `<div id="subscription-root" class="max-w-4xl mx-auto pb-20"></div>`;
     const root = document.getElementById('subscription-root')!;
+    renderAnimatedLoader(root);
 
     const onSignedIn = async () => {
         await refreshEntitlement();
@@ -72,15 +74,15 @@ function renderPlans(root: HTMLElement, plans: SubscriptionPlan[], mySub: Awaite
     <div class="grid gap-4 md:grid-cols-3">
       ${plans.map(plan => `
         <div class="glass-card p-5 flex flex-col ${plan.id === currentPlanId ? 'border border-primary-500/40' : ''}">
-          <h3 class="font-bold text-lg">${plan.name}</h3>
-          <p class="text-sm text-slate-400 mb-3">${plan.description || ''}</p>
+          <h3 class="font-bold text-lg">${escapeHtml(plan.name)}</h3>
+          <p class="text-sm text-slate-400 mb-3">${escapeHtml(plan.description)}</p>
           <p class="text-2xl font-bold mb-3">${plan.priceInr === 0 ? 'Free' : formatCurrency(plan.priceInr)}<span class="text-sm text-slate-400 font-normal">${plan.priceInr === 0 ? '' : ` / ${plan.billingInterval === 'yearly' ? 'year' : 'month'}`}</span></p>
           <ul class="text-sm text-slate-300 space-y-1 mb-4 flex-1">
-            ${plan.features.map(f => `<li class="flex items-start gap-2">${getIcon('check', 14, 'text-green-400 mt-0.5 flex-shrink-0')}<span>${f}</span></li>`).join('')}
+            ${plan.features.map(f => `<li class="flex items-start gap-2">${getIcon('check', 14, 'text-green-400 mt-0.5 flex-shrink-0')}<span>${escapeHtml(f)}</span></li>`).join('')}
           </ul>
           ${plan.id === currentPlanId
             ? `<button disabled class="glass-button-secondary opacity-60 cursor-not-allowed">Current Plan</button>`
-            : `<button class="subscribe-btn glass-button" data-plan-id="${plan.id}" data-plan-name="${plan.name}">Subscribe</button>`}
+            : `<button class="subscribe-btn glass-button" data-plan-id="${plan.id}" data-plan-name="${escapeHtml(plan.name)}">Subscribe</button>`}
         </div>
       `).join('')}
     </div>
@@ -115,7 +117,7 @@ async function openSubscribeFlow(planId: string, planName: string): Promise<void
     const form = document.createElement('form');
     form.className = 'space-y-4';
     form.innerHTML = `
-    <p class="text-sm text-slate-400">Subscribing to <strong>${planName}</strong>.</p>
+    <p class="text-sm text-slate-400">Subscribing to <strong>${escapeHtml(planName)}</strong>.</p>
     <div>
       <label class="block text-sm font-medium mb-1">Discount code (optional)</label>
       <input type="text" name="discountCode" class="glass-input w-full" placeholder="e.g., LAUNCH20">
@@ -164,6 +166,11 @@ async function openSubscribeFlow(planId: string, planName: string): Promise<void
         <input type="text" name="paymentReference" required class="glass-input w-full" placeholder="12-digit UTR from your UPI app">
         <p class="text-xs text-slate-500 mt-1">After paying, enter the reference number so an admin can verify and activate your plan.</p>
       </div>
+      <div>
+        <label class="block text-sm font-medium mb-1">Payment screenshot (optional but recommended)</label>
+        <input type="file" name="paymentScreenshot" accept="image/*" class="glass-input w-full">
+        <p class="text-xs text-slate-500 mt-1">A screenshot of the successful payment makes it faster for an admin to verify.</p>
+      </div>
     `;
     };
     await renderUpiBlock();
@@ -193,9 +200,28 @@ async function openSubscribeFlow(planId: string, planName: string): Promise<void
 
     form.addEventListener('submit', async (e) => {
         e.preventDefault();
-        const paymentReference = (new FormData(form).get('paymentReference') as string || '').trim();
+        const formData = new FormData(form);
+        const paymentReference = (formData.get('paymentReference') as string || '').trim();
+        const screenshotFile = formData.get('paymentScreenshot') as File | null;
+        const submitBtn = footer.querySelector('button[type="submit"]') as HTMLButtonElement;
+
         try {
-            await subscribeToPlan(planId, validatedDiscount ?? undefined, paymentReference || undefined);
+            let paymentScreenshotPath: string | undefined;
+            if (screenshotFile && screenshotFile.size > 0) {
+                if (screenshotFile.size > MAX_RECEIPT_FILE_SIZE) {
+                    showToast(`Screenshot is too large (max ${formatBytes(MAX_RECEIPT_FILE_SIZE)})`, { type: 'error' });
+                    return;
+                }
+                if (!(await isGenuineReceiptFile(screenshotFile))) {
+                    showToast('That file doesn\'t look like a real image — please attach a genuine screenshot.', { type: 'error' });
+                    return;
+                }
+                submitBtn.disabled = true;
+                submitBtn.textContent = 'Uploading screenshot...';
+                paymentScreenshotPath = await uploadPaymentScreenshot(screenshotFile);
+            }
+
+            await subscribeToPlan(planId, validatedDiscount ?? undefined, paymentReference || undefined, paymentScreenshotPath);
             await refreshEntitlement();
             showToast(upiConfigured && amountDue > 0 ? 'Payment submitted — an admin will verify and activate your plan shortly' : 'Subscription recorded', { type: 'success' });
             close();
@@ -203,6 +229,8 @@ async function openSubscribeFlow(planId: string, planName: string): Promise<void
         } catch (error: any) {
             console.error(error);
             showToast(error?.message || 'Failed to subscribe', { type: 'error' });
+            submitBtn.disabled = false;
+            submitBtn.textContent = upiConfigured && amountDue > 0 ? "I've Paid — Submit" : 'Subscribe';
         }
     });
 }

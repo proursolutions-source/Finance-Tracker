@@ -3,7 +3,7 @@
  */
 
 import { db } from '../db';
-import { formatCurrency, formatDate, getIcon, dateInputToISO } from '../utils';
+import { formatCurrency, formatDate, getIcon, dateInputToISO, escapeHtml } from '../utils';
 import { showToast } from '../components/toast';
 import { showModal } from '../components/modal';
 import { createChart } from '../components/charts';
@@ -114,7 +114,7 @@ async function renderNetWorthImpl(): Promise<void> {
                   ${getIcon(meta?.icon || 'box', 18)}
                 </div>
                 <div>
-                  <p class="font-medium text-white">${a.name}</p>
+                  <p class="font-medium text-white">${escapeHtml(a.name)}</p>
                   <p class="text-xs text-gray-400">${meta?.label || a.type}${a.interestRate ? ` · ${a.interestRate}% p.a.` : ''}</p>
                 </div>
               </div>
@@ -150,7 +150,7 @@ async function renderNetWorthImpl(): Promise<void> {
                     ${getIcon(meta?.icon || 'file-text', 18)}
                   </div>
                   <div>
-                    <p class="font-medium text-white">${a.name}</p>
+                    <p class="font-medium text-white">${escapeHtml(a.name)}</p>
                     <p class="text-xs text-gray-400">
                       ${meta?.label || a.type}${a.interestRate ? ` · ${a.interestRate}% p.a.` : ''}
                       ${a.emiAmount ? ` · EMI ${formatCurrency(a.emiAmount)}` : ''}
@@ -193,7 +193,7 @@ async function renderNetWorthImpl(): Promise<void> {
       const to = accounts.find((a: any) => a.id === t.toAccountId);
       return `
                 <div class="glass-card p-3 rounded-xl flex items-center justify-between text-sm">
-                  <span class="text-gray-300">${from?.name || 'Unknown'} ${getIcon('arrow-right', 12)} ${to?.name || 'Unknown'}${t.notes ? ` · ${t.notes}` : ''}</span>
+                  <span class="text-gray-300">${escapeHtml(from?.name) || 'Unknown'} ${getIcon('arrow-right', 12)} ${escapeHtml(to?.name) || 'Unknown'}${t.notes ? ` · ${escapeHtml(t.notes)}` : ''}</span>
                   <div class="flex items-center gap-3">
                     <span class="text-gray-400 text-xs">${formatDate(t.date)}</span>
                     <span class="font-semibold text-cyan-400">${formatCurrency(t.amount)}</span>
@@ -256,7 +256,7 @@ async function renderNetWorthImpl(): Promise<void> {
  */
 function openTransferModal(accounts: any[], toAccount?: any): void {
   const accountOptions = (selectedId?: string) => accounts.map((a: any) =>
-    `<option value="${a.id}" ${a.id === selectedId ? 'selected' : ''}>${a.name} (${formatCurrency(a.balance)})</option>`
+    `<option value="${a.id}" ${a.id === selectedId ? 'selected' : ''}>${escapeHtml(a.name)} (${formatCurrency(a.balance)})</option>`
   ).join('');
 
   const form = document.createElement('form');
@@ -299,7 +299,7 @@ function openTransferModal(accounts: any[], toAccount?: any): void {
     <button type="submit" class="glass-button">${toAccount ? 'Pay' : 'Transfer'}</button>
   `;
 
-  const close = showModal({ title: toAccount ? `Pay ${toAccount.name}` : 'Transfer Money', content: form, footer });
+  const close = showModal({ title: toAccount ? `Pay ${escapeHtml(toAccount.name)}` : 'Transfer Money', content: form, footer });
   footer.querySelector('[data-action="cancel"]')?.addEventListener('click', close);
 
   form.addEventListener('submit', async (e) => {
@@ -338,7 +338,7 @@ async function openAccountModal(existing?: any): Promise<void> {
       <h3 class="text-lg font-semibold text-white">${isEdit ? 'Edit Account' : 'Add Account'}</h3>
       <div>
         <label class="block text-sm text-gray-400 mb-1">Account Name *</label>
-        <input type="text" id="acc-name" class="w-full px-4 py-3 rounded-xl bg-white/10 border border-white/20 text-white" value="${existing?.name || ''}" placeholder="e.g., SBI Savings">
+        <input type="text" id="acc-name" class="w-full px-4 py-3 rounded-xl bg-white/10 border border-white/20 text-white" value="${escapeHtml(existing?.name)}" placeholder="e.g., SBI Savings">
       </div>
       <div>
         <label class="block text-sm text-gray-400 mb-1">Type</label>
@@ -377,7 +377,7 @@ async function openAccountModal(existing?: any): Promise<void> {
       </div>
       <div>
         <label class="block text-sm text-gray-400 mb-1">Notes</label>
-        <textarea id="acc-notes" class="w-full px-4 py-3 rounded-xl bg-white/10 border border-white/20 text-white" rows="2">${existing?.notes || ''}</textarea>
+        <textarea id="acc-notes" class="w-full px-4 py-3 rounded-xl bg-white/10 border border-white/20 text-white" rows="2">${escapeHtml(existing?.notes)}</textarea>
       </div>
       <div class="flex gap-3 pt-2">
         <button id="save-account" class="flex-1 py-3 rounded-xl bg-gradient-to-r from-emerald-600 to-cyan-600 hover:from-emerald-500 hover:to-cyan-500 text-white font-semibold">${isEdit ? 'Update' : 'Add'}</button>

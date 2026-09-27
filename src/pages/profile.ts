@@ -8,10 +8,11 @@
 import { db } from '../db';
 import { store } from '../stores';
 import { showToast } from '../components/toast';
-import { formatDate, getIcon } from '../utils';
+import { formatDate, getIcon, escapeHtml } from '../utils';
 import { isCloudConfigured, getCloudUser, getMyProfile } from '../cloud/cloud-auth';
 import { getMySubscription } from '../cloud/cloud-db';
 import { getCachedTier, TIER_LABELS } from '../cloud/entitlements';
+import { renderAnimatedLoader } from '../components/animated-loader';
 import type { UserProfile } from '../types';
 import type { CloudProfile, CloudSubscription } from '../cloud/types';
 
@@ -21,6 +22,7 @@ export async function renderProfile(): Promise<void> {
 
     mainContent.innerHTML = `<div id="profile-root" class="max-w-4xl mx-auto pb-20"></div>`;
     const root = document.getElementById('profile-root')!;
+    renderAnimatedLoader(root);
 
     const profile = store.getState().userProfile;
 
@@ -50,11 +52,11 @@ function render(root: HTMLElement, profile: UserProfile | null, cloudProfile: Cl
       <div class="glass-card p-5 mb-6">
         <div class="flex items-center gap-4">
           <div class="w-14 h-14 rounded-full bg-primary-500/20 text-primary-400 flex items-center justify-center text-xl font-bold flex-shrink-0">
-            ${(cloudProfile.fullName || cloudProfile.email).charAt(0).toUpperCase()}
+            ${escapeHtml((cloudProfile.fullName || cloudProfile.email).charAt(0).toUpperCase())}
           </div>
           <div class="min-w-0">
-            <p class="font-bold text-lg truncate">${cloudProfile.fullName || 'MoneyFlow Cloud user'}</p>
-            <p class="text-sm text-slate-400 truncate">${cloudProfile.email}</p>
+            <p class="font-bold text-lg truncate">${escapeHtml(cloudProfile.fullName) || 'MoneyFlow Cloud user'}</p>
+            <p class="text-sm text-slate-400 truncate">${escapeHtml(cloudProfile.email)}</p>
           </div>
         </div>
         <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4 text-sm">
@@ -84,11 +86,11 @@ function render(root: HTMLElement, profile: UserProfile | null, cloudProfile: Cl
       <div class="grid gap-4 sm:grid-cols-2">
         <div>
           <label class="block text-sm font-medium mb-1">Full Name</label>
-          <input type="text" name="fullName" value="${profile?.fullName || ''}" class="glass-input w-full">
+          <input type="text" name="fullName" value="${escapeHtml(profile?.fullName)}" class="glass-input w-full">
         </div>
         <div>
           <label class="block text-sm font-medium mb-1">Preferred Name</label>
-          <input type="text" name="preferredName" value="${profile?.preferredName || ''}" class="glass-input w-full">
+          <input type="text" name="preferredName" value="${escapeHtml(profile?.preferredName)}" class="glass-input w-full">
         </div>
         <div>
           <label class="block text-sm font-medium mb-1">Date of Birth</label>
@@ -121,19 +123,19 @@ function render(root: HTMLElement, profile: UserProfile | null, cloudProfile: Cl
       <div class="grid gap-4 sm:grid-cols-2">
         <div>
           <label class="block text-sm font-medium mb-1">City</label>
-          <input type="text" name="city" value="${profile?.city || ''}" class="glass-input w-full">
+          <input type="text" name="city" value="${escapeHtml(profile?.city)}" class="glass-input w-full">
         </div>
         <div>
           <label class="block text-sm font-medium mb-1">State / Province</label>
-          <input type="text" name="stateProvince" value="${profile?.stateProvince || ''}" class="glass-input w-full">
+          <input type="text" name="stateProvince" value="${escapeHtml(profile?.stateProvince)}" class="glass-input w-full">
         </div>
         <div>
           <label class="block text-sm font-medium mb-1">Country</label>
-          <input type="text" name="country" value="${profile?.country || ''}" class="glass-input w-full">
+          <input type="text" name="country" value="${escapeHtml(profile?.country)}" class="glass-input w-full">
         </div>
         <div>
           <label class="block text-sm font-medium mb-1">Postal Code</label>
-          <input type="text" name="postalCode" value="${profile?.postalCode || ''}" class="glass-input w-full">
+          <input type="text" name="postalCode" value="${escapeHtml(profile?.postalCode)}" class="glass-input w-full">
         </div>
         <div>
           <label class="block text-sm font-medium mb-1">Preferred Language</label>
@@ -149,7 +151,7 @@ function render(root: HTMLElement, profile: UserProfile | null, cloudProfile: Cl
         </div>
         <div>
           <label class="block text-sm font-medium mb-1">Timezone</label>
-          <input type="text" name="timezone" value="${profile?.timezone || ''}" placeholder="e.g. Asia/Kolkata" class="glass-input w-full">
+          <input type="text" name="timezone" value="${escapeHtml(profile?.timezone)}" placeholder="e.g. Asia/Kolkata" class="glass-input w-full">
         </div>
       </div>
       <button type="submit" class="glass-button mt-4">Save Location &amp; Preferences</button>

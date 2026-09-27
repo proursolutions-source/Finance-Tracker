@@ -4,7 +4,7 @@
 
 import { db } from '../db';
 import { store } from '../stores';
-import { formatCurrency, formatDate, debounce } from '../utils';
+import { formatCurrency, formatDate, debounce, escapeHtml } from '../utils';
 import { showToast } from '../components/toast';
 import { openTransactionModal } from '../components/transaction-modal';
 import { openSplitModal } from '../components/split-modal';
@@ -26,6 +26,9 @@ let currentFilters: Filters = {
     endDate: '',
 };
 
+const PAGE_SIZE = 50;
+let visibleCount = PAGE_SIZE;
+
 export async function renderTransactions(): Promise<void> {
     const mainContent = document.getElementById('main-content');
     if (!mainContent) return;
@@ -35,14 +38,19 @@ export async function renderTransactions(): Promise<void> {
         const profile = store.getState().userProfile;
         const currency = profile?.primaryCurrency || 'INR';
 
-        const transactions = await db.getTransactions({
-            limit: 200,
+        // Fetch one extra row beyond the current page so we know whether a
+        // "Load more" button is warranted, without a separate count query.
+        const fetched = await db.getTransactions({
+            limit: visibleCount + 1,
             searchQuery: currentFilters.searchQuery || undefined,
             type: currentFilters.type || undefined,
             categoryIds: currentFilters.categoryId ? [currentFilters.categoryId] : undefined,
             startDate: currentFilters.startDate ? new Date(currentFilters.startDate).toISOString() : undefined,
             endDate: currentFilters.endDate ? new Date(currentFilters.endDate).toISOString() : undefined,
         });
+        const hasMore = fetched.length > visibleCount;
+        const transactions = hasMore ? fetched.slice(0, visibleCount) : fetched;
+        const isFiltered = !!(currentFilters.searchQuery || currentFilters.type || currentFilters.categoryId || currentFilters.startDate || currentFilters.endDate);
 
         mainContent.innerHTML = `
       <div class="max-w-4xl mx-auto pb-20">
@@ -74,7 +82,7 @@ export async function renderTransactions(): Promise<void> {
           </select>
           <select id="filter-category" class="glass-input w-full">
             <option value="">All Categories</option>
-            ${categories.map(c => `<option value="${c.id}" ${currentFilters.categoryId === c.id ? 'selected' : ''}>${c.name}</option>`).join('')}
+            ${categories.map(c => `<option value="${c.id}" ${currentFilters.categoryId === c.id ? 'selected' : ''}>${escapeHtml(c.name)}</option>`).join('')}
           </select>
           <div class="grid grid-cols-2 gap-2">
             <input id="filter-start" type="date" value="${currentFilters.startDate}" class="glass-input w-full min-w-0" title="From">
@@ -101,9 +109,9 @@ export async function renderTransactions(): Promise<void> {
                         <i data-lucide="${cat?.icon || 'circle'}" class="w-5 h-5 text-primary-400"></i>
                       </div>
                       <div>
-                        <h4 class="font-medium">${cat?.name || 'Unknown'}</h4>
+                        <h4 class="font-medium">${escapeHtml(cat?.name) || 'Unknown'}</h4>
                         <p class="text-sm text-slate-400">
-                          ${formatDate(txn.date)}${txn.payee ? ' • ' + txn.payee : ''}
+                          ${formatDate(txn.date)}${txn.payee ? ' • ' + escapeHtml(txn.payee) : ''}
                           ${txn.receiptPath ? ' • <i data-lucide=\"paperclip\" class=\"w-3 h-3 inline\"></i>' : ''}
                         </p>
                       </div>
@@ -130,10 +138,16 @@ export async function renderTransactions(): Promise<void> {
                 `;
         }).join('')}
             </div>
+            ${hasMore ? `
+              <div class="text-center pt-4">
+                <button id="load-more-btn" class="glass-button-secondary">Load more</button>
+              </div>
+            ` : ''}
           ` : `
             <div class="text-center py-12 text-slate-400">
-              <i data-lucide="inbox" class="w-16 h-16 mx-auto mb-4 opacity-50"></i>
-              <p>No transactions match your filters</p>
+              <i data-lucide="${isFiltered ? 'search-x' : 'inbox'}" class="w-16 h-16 mx-auto mb-4 opacity-50"></i>
+              <p>${isFiltered ? 'No transactions match your search or filters' : 'No transactions yet'}</p>
+              ${isFiltered ? `<button id="clear-filters-empty-btn" class="text-primary-400 text-sm hover:underline mt-2">Clear filters</button>` : ''}
             </div>
           `}
         </div>
@@ -144,9 +158,10 @@ export async function renderTransactions(): Promise<void> {
             (window as any).lucide.createIcons();
         }
 
-        // Filter events
+        // Filter events — any filter change starts back at page 1
         const debouncedSearch = debounce((value: string) => {
             currentFilters.searchQuery = value;
+            visibleCount = PAGE_SIZE;
             renderTransactions();
         }, 300);
 
@@ -155,22 +170,33 @@ export async function renderTransactions(): Promise<void> {
         });
         document.getElementById('filter-type')?.addEventListener('change', (e) => {
             currentFilters.type = (e.target as HTMLSelectElement).value as Filters['type'];
+            visibleCount = PAGE_SIZE;
             renderTransactions();
         });
         document.getElementById('filter-category')?.addEventListener('change', (e) => {
             currentFilters.categoryId = (e.target as HTMLSelectElement).value;
+            visibleCount = PAGE_SIZE;
             renderTransactions();
         });
         document.getElementById('filter-start')?.addEventListener('change', (e) => {
             currentFilters.startDate = (e.target as HTMLInputElement).value;
+            visibleCount = PAGE_SIZE;
             renderTransactions();
         });
         document.getElementById('filter-end')?.addEventListener('change', (e) => {
             currentFilters.endDate = (e.target as HTMLInputElement).value;
+            visibleCount = PAGE_SIZE;
             renderTransactions();
         });
-        document.getElementById('clear-filters-btn')?.addEventListener('click', () => {
+        const clearFilters = () => {
             currentFilters = { searchQuery: '', type: '', categoryId: '', startDate: '', endDate: '' };
+            visibleCount = PAGE_SIZE;
+            renderTransactions();
+        };
+        document.getElementById('clear-filters-btn')?.addEventListener('click', clearFilters);
+        document.getElementById('clear-filters-empty-btn')?.addEventListener('click', clearFilters);
+        document.getElementById('load-more-btn')?.addEventListener('click', () => {
+            visibleCount += PAGE_SIZE;
             renderTransactions();
         });
 

@@ -47,6 +47,7 @@ function mapSubscription(row: any): CloudSubscription {
         paymentStatus: row.payment_status,
         notes: row.notes,
         paymentReference: row.payment_reference,
+        paymentScreenshotPath: row.payment_screenshot_path,
         createdAt: row.created_at,
         updatedAt: row.updated_at,
         plan: row.subscription_plans ? mapPlan(row.subscription_plans) : undefined,
@@ -245,22 +246,45 @@ export async function getMySubscription(): Promise<CloudSubscription | null> {
  * pretending money changed hands. An admin can activate it manually from the
  * Admin Portal (e.g. for beta users, bank transfer, or comped access) until a
  * real gateway (Razorpay/Stripe) is connected.
+ *
+ * If the user already has a pending request, this updates that same row
+ * instead of inserting a new one — otherwise re-opening the Subscribe modal
+ * (e.g. to switch plans or fix a typo'd payment reference) before an admin
+ * reviews it would pile up duplicate pending subscriptions for one person.
  */
-export async function subscribeToPlan(planId: string, discount?: { id: string; code: string; type: 'percent' | 'flat'; value: number }, paymentReference?: string): Promise<string> {
+export async function subscribeToPlan(planId: string, discount?: { id: string; code: string; type: 'percent' | 'flat'; value: number }, paymentReference?: string, paymentScreenshotPath?: string): Promise<string> {
     const supabase = requireSupabase();
     const user = await getCloudUser();
     if (!user) throw new Error('Sign in to your MoneyFlow Cloud account first.');
+
+    const { data: existingPending, error: findError } = await supabase
+        .from('subscriptions')
+        .select('id')
+        .eq('user_id', user.id)
+        .eq('status', 'pending_payment')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+    if (findError) throw findError;
+
+    const payload = {
+        plan_id: planId,
+        discount_code_id: discount?.id ?? null,
+        discount_applied: discount ? { code: discount.code, type: discount.type, value: discount.value } : null,
+        payment_reference: paymentReference || null,
+        payment_screenshot_path: paymentScreenshotPath || null,
+        updated_at: new Date().toISOString(),
+    };
+
+    if (existingPending) {
+        const { error } = await supabase.from('subscriptions').update(payload).eq('id', existingPending.id);
+        if (error) throw error;
+        return existingPending.id;
+    }
+
     const { data, error } = await supabase
         .from('subscriptions')
-        .insert({
-            user_id: user.id,
-            plan_id: planId,
-            status: 'pending_payment',
-            payment_status: 'manual',
-            discount_code_id: discount?.id ?? null,
-            discount_applied: discount ? { code: discount.code, type: discount.type, value: discount.value } : null,
-            payment_reference: paymentReference || null,
-        })
+        .insert({ ...payload, user_id: user.id, status: 'pending_payment', payment_status: 'manual' })
         .select('id')
         .single();
     if (error) throw error;
@@ -279,6 +303,39 @@ export async function submitPaymentReference(subscriptionId: string, paymentRefe
         .update({ payment_reference: paymentReference, updated_at: new Date().toISOString() })
         .eq('id', subscriptionId);
     if (error) throw error;
+}
+
+/**
+ * Uploads a customer's UPI payment confirmation screenshot to a private
+ * Storage bucket, under their own user id so RLS can scope access to just
+ * them (and admins). Returns the storage path to save on the subscription
+ * row — never a public URL, since the bucket isn't public.
+ */
+export async function uploadPaymentScreenshot(file: File): Promise<string> {
+    const supabase = requireSupabase();
+    const user = await getCloudUser();
+    if (!user) throw new Error('Sign in to your MoneyFlow Cloud account first.');
+
+    const ext = file.name.split('.').pop() || 'jpg';
+    const path = `${user.id}/${crypto.randomUUID()}.${ext}`;
+    const { error } = await supabase.storage.from('payment-screenshots').upload(path, file, {
+        contentType: file.type,
+        upsert: false,
+    });
+    if (error) throw error;
+    return path;
+}
+
+/**
+ * A short-lived signed URL for viewing a payment screenshot — the bucket is
+ * private, so a plain public URL wouldn't work; only the uploader and admins
+ * can generate one, enforced by the bucket's own RLS policies.
+ */
+export async function getPaymentScreenshotUrl(path: string): Promise<string> {
+    const supabase = requireSupabase();
+    const { data, error } = await supabase.storage.from('payment-screenshots').createSignedUrl(path, 300);
+    if (error) throw error;
+    return data.signedUrl;
 }
 
 // ---------- Payment settings (admin's UPI ID, shown to customers) ----------

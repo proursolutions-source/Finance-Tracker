@@ -4,7 +4,7 @@
  */
 
 import { db } from '../db';
-import { formatCurrency, formatDate, getIcon, dateInputToISO } from '../utils';
+import { formatCurrency, formatDate, getIcon, dateInputToISO, escapeHtml } from '../utils';
 import { showToast } from '../components/toast';
 import { showModal, showConfirm } from '../components/modal';
 import type { LendingRecord } from '../types';
@@ -48,7 +48,7 @@ async function renderLendingImpl(): Promise<void> {
                     ${getIcon(l.direction === 'lent' ? 'arrow-up-right' : 'arrow-down-left', 18)}
                   </div>
                   <div>
-                    <h4 class="font-medium">${l.personName}</h4>
+                    <h4 class="font-medium">${escapeHtml(l.personName)}</h4>
                     <p class="text-xs text-slate-400">
                       ${formatDate(l.date)}${l.dueDate ? ` · Due ${formatDate(l.dueDate)}` : ''}
                       ${l.settled ? ' · <span class="text-emerald-400">Settled</span>' : ''}
@@ -76,7 +76,7 @@ async function renderLendingImpl(): Promise<void> {
                   </button>
                 ` : ''}
               </div>
-              ${l.notes ? `<p class="text-xs text-slate-500 mt-2 pt-2 border-t border-white/5">${l.notes}</p>` : ''}
+              ${l.notes ? `<p class="text-xs text-slate-500 mt-2 pt-2 border-t border-white/5">${escapeHtml(l.notes)}</p>` : ''}
             </div>
           `).join('')}
         </div>
@@ -166,7 +166,7 @@ function openLendingModal(record?: LendingRecord): void {
     form.innerHTML = `
     <div>
       <label class="block text-sm font-medium mb-1">Person's Name</label>
-      <input type="text" name="personName" required value="${record?.personName || ''}" class="glass-input w-full" placeholder="e.g., Rahul">
+      <input type="text" name="personName" required value="${escapeHtml(record?.personName)}" class="glass-input w-full" placeholder="e.g., Rahul">
     </div>
     <div>
       <label class="block text-sm font-medium mb-1">Direction</label>
@@ -201,7 +201,7 @@ function openLendingModal(record?: LendingRecord): void {
     </div>
     <div>
       <label class="block text-sm font-medium mb-1">Notes (optional)</label>
-      <textarea name="notes" rows="2" class="glass-input w-full" placeholder="What was this for?">${record?.notes || ''}</textarea>
+      <textarea name="notes" rows="2" class="glass-input w-full" placeholder="What was this for?">${escapeHtml(record?.notes)}</textarea>
     </div>
   `;
 
@@ -219,11 +219,16 @@ function openLendingModal(record?: LendingRecord): void {
         e.preventDefault();
         const formData = new FormData(form);
         const dueDateRaw = formData.get('dueDate') as string;
+        const personName = (formData.get('personName') as string).trim();
+        if (!personName) {
+            showToast('Name is required', { type: 'error' });
+            return;
+        }
 
         try {
             if (record) {
                 await db.updateLending(record.id, {
-                    personName: formData.get('personName') as string,
+                    personName,
                     date: dateInputToISO(formData.get('date') as string),
                     dueDate: dueDateRaw ? new Date(dueDateRaw).toISOString() : null as any,
                     notes: (formData.get('notes') as string) || (null as any),
@@ -231,7 +236,7 @@ function openLendingModal(record?: LendingRecord): void {
                 showToast('Entry updated', { type: 'success' });
             } else {
                 await db.createLending({
-                    personName: formData.get('personName') as string,
+                    personName,
                     direction: formData.get('direction') as 'lent' | 'borrowed',
                     amount: parseFloat(formData.get('amount') as string),
                     date: dateInputToISO(formData.get('date') as string),
@@ -255,7 +260,7 @@ function openPaymentModal(record: LendingRecord & { remaining: number }): void {
     form.className = 'space-y-4';
     form.innerHTML = `
     <p class="text-sm text-slate-400">
-      Recording ${isInward ? 'money received from' : 'a payment you made to'} <strong>${record.personName}</strong>.
+      Recording ${isInward ? 'money received from' : 'a payment you made to'} <strong>${escapeHtml(record.personName)}</strong>.
       Remaining: ${formatCurrency(record.remaining)}
     </p>
     <div>
