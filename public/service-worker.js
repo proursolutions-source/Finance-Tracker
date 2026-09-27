@@ -1,4 +1,4 @@
-const CACHE_NAME = 'moneyflow-v1.0.0';
+const CACHE_NAME = 'moneyflow-v1.0.1';
 const ASSETS_TO_CACHE = [
     '/',
     '/index.html',
@@ -35,7 +35,12 @@ self.addEventListener('activate', (event) => {
     self.clients.claim();
 });
 
-// Fetch event - serve from cache, fallback to network
+// Fetch event
+// - Navigations (HTML shell) use network-first, so a new deploy is picked up
+//   immediately instead of being stuck on a stale index.html that references
+//   asset hashes which no longer exist on the server after a rebuild.
+// - Everything else (hashed JS/CSS/wasm assets) is safe to serve cache-first,
+//   since Vite content-hashes their filenames.
 self.addEventListener('fetch', (event) => {
     const { request } = event;
 
@@ -44,6 +49,29 @@ self.addEventListener('fetch', (event) => {
 
     // Skip chrome-extension and other non-http(s) requests
     if (!request.url.startsWith('http')) return;
+
+    // Never cache cross-origin requests (Supabase auth/REST/storage, etc.) —
+    // these responses vary per signed-in user via the Authorization header,
+    // which a cache keyed only on URL ignores. Caching them previously caused
+    // one user's cached auth/profile/table data to be served back to a
+    // different user signed in later on the same device. Let the browser's
+    // own network stack handle these untouched.
+    if (new URL(request.url).origin !== self.location.origin) return;
+
+    if (request.mode === 'navigate') {
+        event.respondWith(
+            fetch(request)
+                .then((networkResponse) => {
+                    if (networkResponse.ok) {
+                        const responseToCache = networkResponse.clone();
+                        caches.open(CACHE_NAME).then((cache) => cache.put(request, responseToCache));
+                    }
+                    return networkResponse;
+                })
+                .catch(() => caches.match(request).then((cached) => cached || caches.match('/index.html')))
+        );
+        return;
+    }
 
     event.respondWith(
         caches.match(request).then((cachedResponse) => {
@@ -62,7 +90,7 @@ self.addEventListener('fetch', (event) => {
                 return networkResponse;
             }).catch(() => {
                 // Offline fallback for HTML pages
-                if (request.headers.get('accept').includes('text/html')) {
+                if (request.headers.get('accept')?.includes('text/html')) {
                     return caches.match('/index.html');
                 }
             });

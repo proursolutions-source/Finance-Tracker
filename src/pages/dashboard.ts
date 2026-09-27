@@ -6,8 +6,6 @@ import { db } from '../db';
 import { store } from '../stores';
 import { formatCurrency, formatRelativeDate, getBudgetPercentage, getBudgetStatusColor, getIcon } from '../utils';
 import { showToast } from '../components/toast';
-import { showModal } from '../components/modal';
-import type { Transaction } from '../types';
 
 export async function renderDashboard(): Promise<void> {
   const mainContent = document.getElementById('main-content');
@@ -57,6 +55,39 @@ export async function renderDashboard(): Promise<void> {
     const profile = store.getState().userProfile;
     const currency = profile?.primaryCurrency || 'INR';
 
+    // "On This Day" - a subtle, optional nudge into MoneyFlow Memory (disable via Settings)
+    const onThisDayEnabled = localStorage.getItem('moneyflow-on-this-day-enabled') !== 'false';
+    let onThisDayHtml = '';
+    if (onThisDayEnabled) {
+      const now = new Date();
+      const [memories, pastYearTxns] = await Promise.all([
+        db.getOnThisDayMemories(now.getMonth() + 1, now.getDate()),
+        db.getTransactions({
+          startDate: new Date(now.getFullYear() - 1, now.getMonth(), now.getDate()).toISOString(),
+          endDate: new Date(now.getFullYear() - 1, now.getMonth(), now.getDate(), 23, 59, 59).toISOString(),
+        }),
+      ]);
+
+      if (memories.length > 0) {
+        onThisDayHtml = `
+          <div class="glass-card p-4 mb-6 border border-primary-500/30 flex items-center gap-3">
+            ${getIcon('clock', 20)}
+            <p class="text-sm"><span class="text-primary-400 font-medium">On this day, ${new Date(memories[0].occurredAt).getFullYear()}:</span> "${memories[0].title}"</p>
+          </div>
+        `;
+      } else if (pastYearTxns.length > 0) {
+        const spentLastYear = pastYearTxns.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0);
+        if (spentLastYear > 0) {
+          onThisDayHtml = `
+            <div class="glass-card p-4 mb-6 border border-primary-500/30 flex items-center gap-3">
+              ${getIcon('clock', 20)}
+              <p class="text-sm"><span class="text-primary-400 font-medium">On this day last year</span>, you spent ${formatCurrency(spentLastYear, currency)}.</p>
+            </div>
+          `;
+        }
+      }
+    }
+
     mainContent.innerHTML = `
       <div class="max-w-7xl mx-auto">
         <!-- Header -->
@@ -64,7 +95,9 @@ export async function renderDashboard(): Promise<void> {
           <h1 class="text-3xl font-bold mb-2">Welcome back${profile?.preferredName ? ', ' + profile.preferredName : ''}! 👋</h1>
           <p class="text-slate-400">Here's your financial overview</p>
         </div>
-        
+
+        ${onThisDayHtml}
+
         <!-- Summary Cards -->
         <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
           <!-- Balance Card -->
@@ -169,10 +202,7 @@ export async function renderDashboard(): Promise<void> {
           `}
         </div>
         
-        <!-- FAB for adding transaction -->
-        <button id="add-transaction-fab" class="fab" aria-label="Add transaction">
-          <i data-lucide="plus" class="w-6 h-6"></i>
-        </button>
+            <!-- FAB is now global in main.ts -->
       </div>
     `;
 
@@ -181,119 +211,8 @@ export async function renderDashboard(): Promise<void> {
       (window as any).lucide.createIcons();
     }
 
-    // Add transaction button
-    const fab = document.getElementById('add-transaction-fab');
-    fab?.addEventListener('click', openAddTransactionModal);
-
   } catch (error) {
     console.error('[Dashboard] Error rendering:', error);
     showToast('Failed to load dashboard', { type: 'error' });
   }
-}
-
-/**
- * Open modal to add transaction
- */
-function openAddTransactionModal(): void {
-  const categories = store.getState().categories;
-  const profile = store.getState().userProfile;
-  const currency = profile?.primaryCurrency || 'INR';
-
-  const form = document.createElement('form');
-  form.id = 'transaction-form';
-  form.className = 'space-y-4';
-  form.innerHTML = `
-    <div>
-      <label class="block text-sm font-medium mb-2">Amount (${currency})</label>
-      <input type="number" name="amount" step="0.01" min="0" required 
-        class="glass-input w-full" placeholder="0.00">
-    </div>
-    
-    <div>
-      <label class="block text-sm font-medium mb-2">Type</label>
-      <div class="flex gap-2">
-        <label class="flex-1 cursor-pointer">
-          <input type="radio" name="type" value="expense" checked class="sr-only peer">
-          <div class="glass-input text-center peer-checked:bg-red-500/20 peer-checked:border-red-500">
-            Expense
-          </div>
-        </label>
-        <label class="flex-1 cursor-pointer">
-          <input type="radio" name="type" value="income" class="sr-only peer">
-          <div class="glass-input text-center peer-checked:bg-green-500/20 peer-checked:border-green-500">
-            Income
-          </div>
-        </label>
-      </div>
-    </div>
-    
-    <div>
-      <label class="block text-sm font-medium mb-2">Category</label>
-      <select name="categoryId" required class="glass-input w-full">
-        <option value="">Select category...</option>
-        ${categories.map(cat => `
-          <option value="${cat.id}">${cat.icon ? cat.icon + ' ' : ''}${cat.name}</option>
-        `).join('')}
-      </select>
-    </div>
-    
-    <div>
-      <label class="block text-sm font-medium mb-2">Date</label>
-      <input type="date" name="date" required value="${new Date().toISOString().split('T')[0]}" 
-        class="glass-input w-full">
-    </div>
-    
-    <div>
-      <label class="block text-sm font-medium mb-2">Payee (optional)</label>
-      <input type="text" name="payee" class="glass-input w-full" placeholder="e.g., Grocery Store">
-    </div>
-    
-    <div>
-      <label class="block text-sm font-medium mb-2">Notes (optional)</label>
-      <textarea name="notes" rows="2" class="glass-input w-full" placeholder="Add details..."></textarea>
-    </div>
-  `;
-
-  const footer = document.createElement('div');
-  footer.className = 'flex gap-3';
-  footer.innerHTML = `
-    <button type="button" class="glass-button-secondary flex-1" data-action="cancel">Cancel</button>
-    <button type="submit" class="glass-button flex-1">Add Transaction</button>
-  `;
-
-  const close = showModal({
-    title: 'Add Transaction',
-    content: form,
-    footer,
-    size: 'lg',
-  });
-
-  footer.querySelector('[data-action="cancel"]')?.addEventListener('click', close);
-
-  form.addEventListener('submit', async (e) => {
-    e.preventDefault();
-
-    try {
-      const formData = new FormData(form);
-      const data = {
-        amount: parseFloat(formData.get('amount') as string),
-        type: formData.get('type') as 'income' | 'expense',
-        categoryId: formData.get('categoryId') as string,
-        date: new Date(formData.get('date') as string).toISOString(),
-        payee: formData.get('payee') as string || undefined,
-        notes: formData.get('notes') as string || undefined,
-      };
-
-      await db.createTransaction(data);
-      close();
-      showToast('Transaction added successfully', { type: 'success' });
-
-      // Refresh dashboard
-      renderDashboard();
-
-    } catch (error) {
-      showToast('Failed to add transaction', { type: 'error' });
-      console.error(error);
-    }
-  });
 }

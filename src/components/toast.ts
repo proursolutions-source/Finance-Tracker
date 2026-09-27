@@ -10,6 +10,7 @@ interface ToastOptions {
     type?: ToastType;
     duration?: number; // milliseconds
     icon?: string;
+    action?: { label: string; onClick: () => void };
 }
 
 const TOAST_ICONS: Record<ToastType, string> = {
@@ -34,6 +35,7 @@ export function showToast(message: string, options: ToastOptions = {}): void {
         type = 'info',
         duration = 3000,
         icon = TOAST_ICONS[type],
+        action,
     } = options;
 
     const container = document.getElementById('toast-container');
@@ -45,7 +47,8 @@ export function showToast(message: string, options: ToastOptions = {}): void {
     toast.innerHTML = `
     ${getIcon(icon, 20, 'flex-shrink-0')}
     <p class="flex-1 text-sm font-medium">${message}</p>
-    <button class="toast-close flex-shrink-0 hover:opacity-70 transition-opacity">
+    ${action ? `<button class="toast-action flex-shrink-0 text-sm font-semibold underline hover:opacity-70 transition-opacity">${action.label}</button>` : ''}
+    <button class="toast-close flex-shrink-0 hover:opacity-70 transition-opacity" aria-label="Dismiss notification">
       ${getIcon('x', 16)}
     </button>
   `;
@@ -55,6 +58,14 @@ export function showToast(message: string, options: ToastOptions = {}): void {
     // Initialize icons
     if ((window as any).lucide) {
         (window as any).lucide.createIcons();
+    }
+
+    // Action button
+    if (action) {
+        toast.querySelector('.toast-action')?.addEventListener('click', () => {
+            action.onClick();
+            removeToast(toast);
+        });
     }
 
     // Close button

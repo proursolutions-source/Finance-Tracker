@@ -7,21 +7,32 @@ export default {
     darkMode: 'class', // Use class-based dark mode
     theme: {
         extend: {
+            fontFamily: {
+                sans: ['Poppins', 'Inter', 'system-ui', 'sans-serif'],
+            },
             colors: {
+                // Brand palette
                 primary: {
                     50: '#f0f9ff',
                     100: '#e0f2fe',
                     200: '#bae6fd',
-                    300: '#7dd3fc',
-                    400: '#38bdf8',
-                    500: '#0ea5e9',
+                    300: '#93c5fd', // Accent
+                    400: '#38bdf8', // Light Blue
+                    500: '#0ea5e9', // Primary Blue
                     600: '#0284c7',
                     700: '#0369a1',
                     800: '#075985',
                     900: '#0c4a6e',
+                    950: '#0b1020', // Primary Dark
                 },
-                income: '#10b981', // green-500
-                expense: '#ef4444', // red-500
+                brand: {
+                    dark: '#0b1020',
+                    blue: '#0ea5e9',
+                    lightBlue: '#38bdf8',
+                    accent: '#93c5fd',
+                },
+                income: '#22c55e', // Success
+                expense: '#ef4444', // Alert
             },
             backdropBlur: {
                 xs: '2px',

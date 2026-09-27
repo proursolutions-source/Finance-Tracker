@@ -4,6 +4,7 @@
  */
 
 import type { UserProfile, Category, Transaction, Budget } from './types';
+import { setTheme as applyTheme } from './utils';
 
 type StateChangeListener = (state: AppState) => void;
 
@@ -116,9 +117,11 @@ class Store {
      * Set theme
      */
     setTheme(theme: 'light' | 'dark'): void {
-        localStorage.setItem('theme', theme);
-        document.documentElement.classList.remove('light', 'dark');
-        document.documentElement.classList.add(theme);
+        // Delegates to utils.ts's setTheme so there is exactly one place that
+        // applies a theme (localStorage, the class, and the color-scheme
+        // property for native controls) — this used to duplicate that logic
+        // and had drifted out of sync with it.
+        applyTheme(theme);
         this.setState({ theme });
     }
 

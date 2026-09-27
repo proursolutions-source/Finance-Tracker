@@ -3,6 +3,7 @@
  */
 
 type RouteHandler = () => void | Promise<void>;
+type NotFoundHandler = (path: string) => void | Promise<void>;
 
 interface Route {
     path: string;
@@ -14,6 +15,15 @@ class Router {
     private routes: Map<string, Route> = new Map();
     private currentPath: string = '';
     private onboardingRequired: boolean = true;
+    private notFoundHandler: NotFoundHandler | null = null;
+
+    /**
+     * Register a handler shown for any hash path that doesn't match a
+     * registered route, instead of silently falling back to "/".
+     */
+    setNotFoundHandler(handler: NotFoundHandler): void {
+        this.notFoundHandler = handler;
+    }
 
     /**
      * Register a route
@@ -61,19 +71,23 @@ class Router {
         }
 
         // Find matching route
-        let route = this.routes.get(path);
-
-        // If not found, try default route
-        if (!route) {
-            route = this.routes.get('/');
-        }
+        const route = this.routes.get(path);
 
         if (route) {
             try {
                 await route.handler();
             } catch (error) {
                 console.error('[Router] Error handling route:', error);
-                // Could show error page here
+            }
+            return;
+        }
+
+        // Unknown path - show a real 404 instead of silently rendering "/"
+        if (this.notFoundHandler) {
+            try {
+                await this.notFoundHandler(path);
+            } catch (error) {
+                console.error('[Router] Error handling not-found route:', error);
             }
         } else {
             console.warn('[Router] No handler for path:', path);
@@ -100,6 +114,13 @@ class Router {
         if (queryStart === -1) return new URLSearchParams();
 
         return new URLSearchParams(hash.slice(queryStart));
+    }
+    /**
+     * Reload current route (bypasses duplicate-path guard)
+     */
+    async reload(): Promise<void> {
+        this.currentPath = '';
+        await this.handleRoute();
     }
 }
 

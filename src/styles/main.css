@@ -20,6 +20,11 @@
   --color-text-secondary: #cbd5e1;
   --glass-bg: rgba(255, 255, 255, 0.05);
   --glass-border: rgba(255, 255, 255, 0.1);
+  /* Tells the browser to use dark-themed native controls (select dropdown
+     popups, checkboxes, date/time pickers, scrollbars) instead of always
+     defaulting to light ones. setTheme() also sets this inline on first
+     paint; declaring it here too covers the instant before that JS runs. */
+  color-scheme: dark;
 }
 
 .light {
@@ -29,28 +34,128 @@
   --color-text-secondary: #475569;
   --glass-bg: rgba(255, 255, 255, 0.7);
   --glass-border: rgba(0, 0, 0, 0.1);
+  color-scheme: light;
 }
 
-/* Glassmorphism Components */
+/*
+ * Light-theme overrides for the hardcoded dark-theme utility classes used
+ * directly in page markup throughout the app (text-white, bg-slate-900,
+ * bg-white/5, etc.). These were written assuming a permanently dark theme;
+ * rather than rewrite every page, we override the same classes' effect
+ * when .light is active. Two classes in the selector (e.g. ".light .text-white")
+ * beats Tailwind's own single-class utility on specificity, so this works
+ * without !important.
+ */
+.light body {
+  background: linear-gradient(to bottom right, #f8fafc, #eef2f7, #f8fafc);
+  color: var(--color-text-primary);
+}
+
+.light .text-white,
+.light .text-slate-100,
+.light .text-slate-200 {
+  color: var(--color-text-primary);
+}
+
+.light .text-slate-300,
+.light .text-slate-400,
+.light .text-gray-300,
+.light .text-gray-400 {
+  color: var(--color-text-secondary);
+}
+
+.light .text-slate-500,
+.light .text-gray-500 {
+  color: #64748b;
+}
+
+.light .bg-slate-900,
+.light .bg-slate-800,
+.light .bg-slate-700,
+.light .bg-gray-900,
+.light .bg-gray-800 {
+  background-color: var(--color-bg-secondary);
+}
+
+/* Full-screen pre-app overlays (local login, PIN lock) hardcode this as their
+   backdrop. Missing this override left them near-black in light mode even
+   though the glass-card on top of them correctly went translucent-light,
+   producing a muddy gray card instead of the intended light surface. */
+.light .bg-slate-950 {
+  background: linear-gradient(to bottom right, #f8fafc, #eef2f7, #f8fafc);
+}
+
+.light .bg-white\/5,
+.light .bg-white\/10 {
+  background-color: rgba(15, 23, 42, 0.04);
+}
+
+.light .hover\:bg-white\/10:hover,
+.light .hover\:bg-white\/20:hover {
+  background-color: rgba(15, 23, 42, 0.08);
+}
+
+.light .border-white\/5,
+.light .border-white\/10,
+.light .border-white\/20 {
+  border-color: rgba(15, 23, 42, 0.12);
+}
+
+.light .bg-black\/50 {
+  background-color: rgba(15, 23, 42, 0.3);
+}
+
+.light .placeholder-slate-400::placeholder {
+  color: #94a3b8;
+}
+
+/* Glassmorphism Components - use the theme variables (set per .light/.dark
+   above) instead of hardcoded colors, so they actually change with the
+   theme toggle rather than always rendering as dark glass. */
 @layer components {
   .glass-card {
-    @apply bg-white/5 dark:bg-white/5 backdrop-blur-md border border-white/10 rounded-xl shadow-xl;
+    background-color: var(--glass-bg);
+    border-color: var(--glass-border);
+    color: var(--color-text-primary);
+    @apply backdrop-blur-md border rounded-xl shadow-xl;
   }
 
   .glass-card-hover {
-    @apply glass-card transition-all duration-300 hover:bg-white/10 hover:shadow-2xl hover:scale-[1.02];
+    @apply glass-card transition-all duration-300 hover:shadow-2xl hover:scale-[1.02] hover:brightness-110;
+  }
+
+  .glass-button-secondary:hover {
+    filter: brightness(1.15);
   }
 
   .glass-input {
-    @apply bg-white/5 backdrop-blur-sm border border-white/20 rounded-lg px-4 py-2.5 text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all;
+    background-color: var(--glass-bg);
+    border-color: var(--glass-border);
+    color: var(--color-text-primary);
+    @apply backdrop-blur-sm border rounded-lg px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all;
+  }
+
+  .glass-input::placeholder {
+    color: var(--color-text-secondary);
+  }
+
+  /* Belt-and-suspenders alongside color-scheme above: Chromium applies
+     author background/color on <option> elements directly, so pin them to
+     the theme's actual surface color instead of leaving them at the UA default. */
+  select.glass-input option {
+    background-color: var(--color-bg-secondary);
+    color: var(--color-text-primary);
   }
 
   .glass-button {
-    @apply bg-primary-500/80 backdrop-blur-sm hover:bg-primary-600 text-white font-medium px-6 py-2.5 rounded-lg transition-all duration-200 hover:shadow-lg hover:scale-105 active:scale-95;
+    @apply bg-primary-500/90 backdrop-blur-sm hover:bg-primary-600 text-white font-medium px-6 py-2.5 rounded-lg transition-all duration-200 hover:shadow-lg hover:scale-105 active:scale-95;
   }
 
   .glass-button-secondary {
-    @apply bg-white/10 backdrop-blur-sm hover:bg-white/20 text-white font-medium px-6 py-2.5 rounded-lg border border-white/20 transition-all duration-200 hover:shadow-lg;
+    background-color: var(--glass-bg);
+    border-color: var(--glass-border);
+    color: var(--color-text-primary);
+    @apply backdrop-blur-sm font-medium px-6 py-2.5 rounded-lg border transition-all duration-200 hover:shadow-lg;
   }
 
   .glass-modal {

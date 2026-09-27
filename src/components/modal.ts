@@ -50,7 +50,7 @@ export function showModal(options: ModalOptions): () => void {
     header.className = 'flex items-center justify-between p-6 border-b border-white/10';
     header.innerHTML = `
     <h2 class="text-xl font-bold">${title}</h2>
-    <button class="modal-close hover:opacity-70 transition-opacity">
+    <button class="modal-close hover:opacity-70 transition-opacity" aria-label="Close dialog">
       ${getIcon('x', 24)}
     </button>
   `;
@@ -83,6 +83,18 @@ export function showModal(options: ModalOptions): () => void {
     modalContent.appendChild(body);
     if (footerEl) {
         modalContent.appendChild(footerEl);
+    }
+
+    // If the body content is a <form>, wire up any submit/reset buttons that
+    // live in the footer (a sibling, not a descendant) via the HTML5 `form`
+    // attribute so they still trigger the form's submit event.
+    const bodyForm = content instanceof HTMLFormElement ? content : null;
+    if (bodyForm && footerEl) {
+        if (!bodyForm.id) {
+            bodyForm.id = `modal-form-${Math.random().toString(36).slice(2)}`;
+        }
+        footerEl.querySelectorAll('button[type="submit"], button[type="reset"], input[type="submit"]')
+            .forEach((btn) => btn.setAttribute('form', bodyForm.id));
     }
 
     modal.appendChild(modalContent);

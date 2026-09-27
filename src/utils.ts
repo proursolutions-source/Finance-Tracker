@@ -15,6 +15,20 @@ export function uuid(): string {
 }
 
 /**
+ * Convert a `<input type="date">` value (YYYY-MM-DD, no time/timezone) into an ISO timestamp,
+ * combining the picked calendar date with the current local time-of-day.
+ * `new Date(dateStr).toISOString()` parses date-only strings as UTC midnight, which in
+ * timezones ahead of UTC (e.g. IST) makes "today" look several hours in the past relative to
+ * other timestamps recorded with `new Date().toISOString()` (e.g. auto-generated recurring
+ * transactions) — breaking relative-time display and chronological ordering for same-day entries.
+ */
+export function dateInputToISO(dateStr: string): string {
+    const now = new Date();
+    const [year, month, day] = dateStr.split('-').map(Number);
+    return new Date(year, month - 1, day, now.getHours(), now.getMinutes(), now.getSeconds(), now.getMilliseconds()).toISOString();
+}
+
+/**
  * Format currency with Indian numbering system
  * @param amount - Amount in base unit (e.g., rupees)
  * @param currency - Currency code (default: INR)
@@ -281,7 +295,7 @@ export function isDarkModePreferred(): boolean {
 export function getTheme(): 'light' | 'dark' {
     const stored = localStorage.getItem('theme');
     if (stored === 'light' || stored === 'dark') return stored;
-    return isDarkModePreferred() ? 'dark' : 'dark'; // Default to dark
+    return isDarkModePreferred() ? 'dark' : 'light';
 }
 
 /**
@@ -291,6 +305,12 @@ export function setTheme(theme: 'light' | 'dark'): void {
     localStorage.setItem('theme', theme);
     document.documentElement.classList.remove('light', 'dark');
     document.documentElement.classList.add(theme);
+    // Without this, browsers default to light-themed native controls (select
+    // dropdown popups, checkboxes, date pickers, scrollbars) regardless of the
+    // app's own dark styling — e.g. a category dropdown's closed control matches
+    // dark mode, but its open option list renders black-on-black or otherwise
+    // mismatched because the browser never knew this page was dark.
+    document.documentElement.style.colorScheme = theme;
 }
 
 /**

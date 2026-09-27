@@ -7,6 +7,7 @@ import { router } from '../router';
 import { store } from '../stores';
 import { showToast } from '../components/toast';
 import { getCurrentISODate } from '../utils';
+import { startTour } from '../components/product-tour';
 import type { UserProfile, FinancialGoal } from '../types';
 
 let currentStep = 1;
@@ -19,6 +20,15 @@ let formData: Partial<UserProfile> = {
     preferredLanguage: 'en',
     dataSharingOptOut: true,
 };
+
+/**
+ * Carries over fields already known (e.g. name from the signup form) so
+ * onboarding doesn't ask for the same thing twice.
+ */
+export function primeOnboardingFromProfile(profile: Partial<UserProfile> | null): void {
+    if (!profile) return;
+    formData = { ...formData, ...profile };
+}
 
 export async function renderOnboarding(): Promise<void> {
     const mainContent = document.getElementById('main-content');
@@ -372,6 +382,9 @@ async function completeOnboarding(): Promise<void> {
         currentStep = 1;
         formData = {};
         router.navigate('/');
+
+        // Let the dashboard finish rendering, then start the guided tour
+        setTimeout(startTour, 400);
 
     } catch (error) {
         console.error('[Onboarding] Error saving profile:', error);
