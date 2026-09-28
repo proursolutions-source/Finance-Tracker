@@ -213,6 +213,20 @@ export interface Account {
     creditLimit?: number; // credit-card only: total limit, used to show utilization
     dueDate?: string; // credit-card (next bill due) or loan (next EMI due)
     emiAmount?: number; // loan only: the recurring EMI amount
+    status: 'open' | 'closed'; // loan/credit-card: whether it's still active or fully paid off/closed
+}
+
+// A single EMI/installment due date on a loan or credit-card account.
+// Multiple accounts can each have many of these, independently tracked.
+export interface LoanPayment {
+    id: string;
+    accountId: string;
+    dueDate: string;
+    amount: number;
+    status: 'paid' | 'due' | 'overdue';
+    paidDate?: string;
+    notes?: string;
+    createdAt: string;
 }
 
 // Internal transfer between two of the user's own accounts.

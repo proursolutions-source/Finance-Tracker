@@ -150,11 +150,14 @@ async function renderNetWorthImpl(): Promise<void> {
                     ${getIcon(meta?.icon || 'file-text', 18)}
                   </div>
                   <div>
-                    <p class="font-medium text-white">${escapeHtml(a.name)}</p>
+                    <p class="font-medium text-white flex items-center gap-2">
+                      ${escapeHtml(a.name)}
+                      ${a.status === 'closed' ? '<span class="text-[10px] px-1.5 py-0.5 rounded bg-slate-600/50 text-slate-300">Closed</span>' : ''}
+                    </p>
                     <p class="text-xs text-gray-400">
                       ${meta?.label || a.type}${a.interestRate ? ` · ${a.interestRate}% p.a.` : ''}
                       ${a.emiAmount ? ` · EMI ${formatCurrency(a.emiAmount)}` : ''}
-                      ${a.dueDate ? ` · <span class="${dueSoon ? 'text-amber-400' : ''}">Due ${formatDate(a.dueDate)}</span>` : ''}
+                      ${a.status !== 'closed' && a.dueDate ? ` · <span class="${dueSoon ? 'text-amber-400' : ''}">Due ${formatDate(a.dueDate)}</span>` : ''}
                     </p>
                   </div>
                 </div>
@@ -374,6 +377,13 @@ async function openAccountModal(existing?: any): Promise<void> {
           <label class="block text-sm text-gray-400 mb-1">Next Due Date</label>
           <input type="date" id="acc-due-date" class="w-full px-4 py-3 rounded-xl bg-white/10 border border-white/20 text-white" value="${existing?.dueDate ? existing.dueDate.split('T')[0] : ''}">
         </div>
+        <div class="col-span-2">
+          <label class="block text-sm text-gray-400 mb-1">Status</label>
+          <select id="acc-status" class="w-full px-4 py-3 rounded-xl bg-white/10 border border-white/20 text-white">
+            <option value="open" ${(existing?.status || 'open') === 'open' ? 'selected' : ''}>Open</option>
+            <option value="closed" ${existing?.status === 'closed' ? 'selected' : ''}>Closed / Paid off</option>
+          </select>
+        </div>
       </div>
       <div>
         <label class="block text-sm text-gray-400 mb-1">Notes</label>
@@ -408,6 +418,9 @@ async function openAccountModal(existing?: any): Promise<void> {
     const creditLimitRaw = (document.getElementById('acc-credit-limit') as HTMLInputElement).value;
     const emiRaw = (document.getElementById('acc-emi') as HTMLInputElement).value;
     const dueDateRaw = (document.getElementById('acc-due-date') as HTMLInputElement).value;
+    const status = ['credit-card', 'loan'].includes(type)
+      ? ((document.getElementById('acc-status') as HTMLSelectElement).value as 'open' | 'closed')
+      : 'open';
 
     if (!name || isNaN(balance)) { showToast('Name and balance required', { type: 'error' }); return; }
 
@@ -415,6 +428,7 @@ async function openAccountModal(existing?: any): Promise<void> {
       creditLimit: type === 'credit-card' && creditLimitRaw ? parseFloat(creditLimitRaw) : undefined,
       emiAmount: type === 'loan' && emiRaw ? parseFloat(emiRaw) : undefined,
       dueDate: ['credit-card', 'loan'].includes(type) && dueDateRaw ? new Date(dueDateRaw).toISOString() : undefined,
+      status,
     };
 
     if (isEdit) {

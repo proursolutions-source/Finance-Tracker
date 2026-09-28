@@ -7,13 +7,15 @@
 import { db } from '../db';
 import { formatCurrency, formatDate, getIcon, escapeHtml } from '../utils';
 import { withTierGate } from '../components/upgrade-gate';
+import { showToast } from '../components/toast';
+import { showConfirm } from '../components/modal';
 import type { Account, LendingRecord } from '../types';
 
 export async function renderLoanTools(): Promise<void> {
     return withTierGate('pro', 'Loan & Debt Tools', renderLoanToolsImpl);
 }
 
-type Tab = 'emi' | 'amortization' | 'payoff';
+type Tab = 'emi' | 'amortization' | 'payoff' | 'tracker';
 let activeTab: Tab = 'emi';
 
 async function renderLoanToolsImpl(): Promise<void> {
@@ -30,6 +32,7 @@ async function renderLoanToolsImpl(): Promise<void> {
         <button data-tab="emi" class="tab-btn px-4 py-2 rounded-lg text-sm ${activeTab === 'emi' ? 'bg-primary-500 text-white' : 'glass-button-secondary'}">EMI &amp; Interest</button>
         <button data-tab="amortization" class="tab-btn px-4 py-2 rounded-lg text-sm ${activeTab === 'amortization' ? 'bg-primary-500 text-white' : 'glass-button-secondary'}">Amortization Schedule</button>
         <button data-tab="payoff" class="tab-btn px-4 py-2 rounded-lg text-sm ${activeTab === 'payoff' ? 'bg-primary-500 text-white' : 'glass-button-secondary'}">Debt Payoff Planner</button>
+        <button data-tab="tracker" class="tab-btn px-4 py-2 rounded-lg text-sm ${activeTab === 'tracker' ? 'bg-primary-500 text-white' : 'glass-button-secondary'}">EMI Tracker</button>
       </div>
       <div id="loan-tools-content"></div>
     </div>
@@ -45,7 +48,8 @@ async function renderLoanToolsImpl(): Promise<void> {
     const content = document.getElementById('loan-tools-content')!;
     if (activeTab === 'emi') renderEmiCalculator(content);
     else if (activeTab === 'amortization') renderAmortization(content);
-    else await renderPayoffPlanner(content);
+    else if (activeTab === 'payoff') await renderPayoffPlanner(content);
+    else await renderEmiTracker(content);
 
     if ((window as any).lucide) (window as any).lucide.createIcons();
 }
@@ -280,4 +284,105 @@ function simulatePayoff(debts: Debt[], extraPayment: number, strategy: 'avalanch
     }
 
     return { months: month, totalInterest, order };
+}
+
+// ============================== EMI TRACKER ==============================
+// Every loan/credit-card account can carry many individually-tracked
+// installments (paid / due / overdue), and its own open/closed status —
+// so multiple loans, each with their own multi-installment history, are
+// all tracked side by side here.
+
+async function renderEmiTracker(content: HTMLElement): Promise<void> {
+    const accounts: Account[] = (await db.getAccounts()).filter((a: Account) => ['loan', 'credit-card'].includes(a.type));
+    const allPayments = await db.getLoanPayments();
+
+    if (accounts.length === 0) {
+        content.innerHTML = `
+      <div class="glass-card p-8 text-center text-slate-400">
+        ${getIcon('banknote', 40, 'mx-auto mb-4 opacity-50')}
+        <p>No loan or credit-card accounts yet.</p>
+        <p class="text-sm mt-1">Add one under <a href="#/networth" class="text-primary-400 hover:underline">Net Worth</a> to start tracking its installments here.</p>
+      </div>
+    `;
+        return;
+    }
+
+    content.innerHTML = accounts.map(acc => {
+        const payments = allPayments.filter(p => p.accountId === acc.id);
+        const paidCount = payments.filter(p => p.status === 'paid').length;
+        const overdueCount = payments.filter(p => p.status === 'overdue').length;
+        const isClosed = (acc as any).status === 'closed';
+
+        return `
+      <div class="glass-card p-5 mb-4">
+        <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
+          <div>
+            <h3 class="font-semibold flex items-center gap-2">
+              ${escapeHtml(acc.name)}
+              <span class="text-[10px] px-1.5 py-0.5 rounded ${isClosed ? 'bg-slate-600/50 text-slate-300' : 'bg-green-500/20 text-green-400'}">${isClosed ? 'Closed' : 'Open'}</span>
+            </h3>
+            <p class="text-xs text-slate-500">${payments.length} installment${payments.length === 1 ? '' : 's'} tracked &middot; ${paidCount} paid${overdueCount > 0 ? ` &middot; <span class="text-red-400">${overdueCount} overdue</span>` : ''}</p>
+          </div>
+          <div class="flex gap-2">
+            ${acc.emiAmount ? `<button class="generate-schedule-btn glass-button-secondary text-xs" data-account-id="${acc.id}">+ Generate 12 installments</button>` : ''}
+            <button class="toggle-status-btn glass-button-secondary text-xs" data-account-id="${acc.id}" data-current-status="${isClosed ? 'closed' : 'open'}">${isClosed ? 'Reopen' : 'Mark Closed'}</button>
+          </div>
+        </div>
+        ${payments.length === 0 ? '<p class="text-sm text-slate-500">No installments logged yet.</p>' : `
+          <div class="space-y-1.5">
+            ${payments.map(p => `
+              <div class="flex items-center justify-between text-sm p-2 rounded-lg ${p.status === 'overdue' ? 'bg-red-500/10' : 'bg-white/5'}">
+                <label class="flex items-center gap-2 cursor-pointer flex-1">
+                  <input type="checkbox" class="pay-checkbox" data-id="${p.id}" ${p.status === 'paid' ? 'checked' : ''}>
+                  <span class="${p.status === 'paid' ? 'line-through text-slate-500' : ''}">${formatDate(p.dueDate)}</span>
+                  <span class="${p.status === 'overdue' ? 'text-red-400' : 'text-slate-400'}">${p.status === 'overdue' ? '(overdue)' : ''}</span>
+                </label>
+                <span class="font-medium">${formatCurrency(p.amount)}</span>
+                <button class="delete-payment-btn text-slate-500 hover:text-red-400 ml-3" data-id="${p.id}">${getIcon('x', 14)}</button>
+              </div>
+            `).join('')}
+          </div>
+        `}
+      </div>
+    `;
+    }).join('');
+
+    content.querySelectorAll<HTMLButtonElement>('.generate-schedule-btn').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            try {
+                await db.generateLoanPaymentSchedule(btn.dataset.accountId!, 12);
+                showToast('12 installments generated', { type: 'success' });
+                renderLoanTools();
+            } catch (error) {
+                console.error(error);
+                showToast('Failed to generate schedule', { type: 'error' });
+            }
+        });
+    });
+
+    content.querySelectorAll<HTMLButtonElement>('.toggle-status-btn').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            const newStatus = btn.dataset.currentStatus === 'closed' ? 'open' : 'closed';
+            await db.updateAccount(btn.dataset.accountId!, { status: newStatus });
+            showToast(newStatus === 'closed' ? 'Marked closed' : 'Reopened', { type: 'success' });
+            renderLoanTools();
+        });
+    });
+
+    content.querySelectorAll<HTMLInputElement>('.pay-checkbox').forEach(cb => {
+        cb.addEventListener('change', async () => {
+            await db.markLoanPaymentPaid(cb.dataset.id!, cb.checked);
+            renderLoanTools();
+        });
+    });
+
+    content.querySelectorAll<HTMLButtonElement>('.delete-payment-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            showConfirm('Delete Installment', 'Remove this installment from the schedule?', async () => {
+                await db.deleteLoanPayment(btn.dataset.id!);
+                showToast('Installment removed', { type: 'success' });
+                renderLoanTools();
+            });
+        });
+    });
 }

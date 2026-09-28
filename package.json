@@ -6,8 +6,11 @@
     "scripts": {
         "dev": "vite",
         "build": "vite build",
-        "preview": "vite preview"
+        "preview": "vite preview",
+        "electron": "electron electron/main.cjs",
+        "electron:build": "vite build && electron-builder"
     },
+    "main": "electron/main.cjs",
     "keywords": [
         "finance",
         "tracker",
@@ -24,6 +27,8 @@
         "@types/node": "^20.11.5",
         "@types/qrcode": "^1.5.6",
         "autoprefixer": "^10.4.24",
+        "electron": "^44.4.5",
+        "electron-builder": "^26.15.3",
         "postcss": "^8.5.6",
         "tailwindcss": "^3.4.1",
         "typescript": "^5.3.3",

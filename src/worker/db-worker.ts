@@ -594,6 +594,35 @@ async function migrateSchema(): Promise<void> {
             try { db.run('ALTER TABLE categories ADD COLUMN isFixed INTEGER'); } catch (ignored) { }
         }
 
+        // 15a. Loan/credit-card account open-vs-closed status, and a
+        // per-installment payment log so a single loan account can track
+        // many EMI cycles, each independently marked paid/due/overdue —
+        // and multiple loans can each be tracked this way.
+        try {
+            db.exec('SELECT status FROM accounts LIMIT 1');
+        } catch (e) {
+            console.log('[DB Worker] Migrating accounts table (status)...');
+            try { db.run("ALTER TABLE accounts ADD COLUMN status TEXT NOT NULL DEFAULT 'open'"); } catch (ignored) { }
+        }
+
+        console.log('[DB Worker] Creating loan_payments table...');
+        db.run(`
+        CREATE TABLE IF NOT EXISTS loan_payments (
+          id TEXT PRIMARY KEY,
+          accountId TEXT NOT NULL,
+          dueDate TEXT NOT NULL,
+          amount REAL NOT NULL,
+          status TEXT NOT NULL DEFAULT 'due' CHECK(status IN ('paid','due','overdue')),
+          paidDate TEXT,
+          notes TEXT,
+          createdAt TEXT NOT NULL DEFAULT (datetime('now')),
+          FOREIGN KEY (accountId) REFERENCES accounts(id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_loan_payments_accountId ON loan_payments(accountId);
+        CREATE INDEX IF NOT EXISTS idx_loan_payments_dueDate ON loan_payments(dueDate);
+        `);
+        console.log('[DB Worker] ✅ Loan payments table created');
+
         // 15. Challenges — user-started gamification goals (no-spend streak,
         // savings target, stay-under-budget) that the Achievements page
         // tracks progress against.

@@ -3,7 +3,7 @@
  * Provides a clean async API for database operations
  */
 
-import type { WorkerMessage, WorkerResponse, Transaction, Category, Budget, Reminder, UserProfile, LendingRecord, LendingPayment, Transfer, Memory, MemoryMedia, Milestone, LifeEvent, InvestmentTransaction, FinanceDocument, Challenge } from './types';
+import type { WorkerMessage, WorkerResponse, Transaction, Category, Budget, Reminder, UserProfile, LendingRecord, LendingPayment, Transfer, Memory, MemoryMedia, Milestone, LifeEvent, InvestmentTransaction, FinanceDocument, Challenge, LoanPayment } from './types';
 
 import DBWorker from './worker/db-worker?worker';
 
@@ -491,16 +491,16 @@ class DatabaseAPI {
         return this.query('SELECT * FROM accounts ORDER BY type, name');
     }
 
-    async createAccount(account: { name: string; type: string; balance: number; notes?: string; interestRate?: number; creditLimit?: number; dueDate?: string; emiAmount?: number }): Promise<string> {
+    async createAccount(account: { name: string; type: string; balance: number; notes?: string; interestRate?: number; creditLimit?: number; dueDate?: string; emiAmount?: number; status?: 'open' | 'closed' }): Promise<string> {
         const id = crypto.randomUUID();
         await this.exec(
-            `INSERT INTO accounts (id, name, type, balance, notes, interestRate, creditLimit, dueDate, emiAmount) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-            [id, account.name, account.type, account.balance, account.notes || null, account.interestRate || 0, account.creditLimit || null, account.dueDate || null, account.emiAmount || null]
+            `INSERT INTO accounts (id, name, type, balance, notes, interestRate, creditLimit, dueDate, emiAmount, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [id, account.name, account.type, account.balance, account.notes || null, account.interestRate || 0, account.creditLimit || null, account.dueDate || null, account.emiAmount || null, account.status || 'open']
         );
         return id;
     }
 
-    async updateAccount(id: string, updates: Partial<{ name: string; type: string; balance: number; notes: string; interestRate: number; creditLimit: number; dueDate: string; emiAmount: number }>): Promise<void> {
+    async updateAccount(id: string, updates: Partial<{ name: string; type: string; balance: number; notes: string; interestRate: number; creditLimit: number; dueDate: string; emiAmount: number; status: 'open' | 'closed' }>): Promise<void> {
         const fields: string[] = [];
         const values: any[] = [];
         Object.entries(updates).forEach(([key, value]) => {
@@ -517,6 +517,63 @@ class DatabaseAPI {
 
     async deleteAccount(id: string): Promise<void> {
         await this.exec('DELETE FROM accounts WHERE id = ?', [id]);
+        await this.exec('DELETE FROM loan_payments WHERE accountId = ?', [id]);
+    }
+
+    // === LOAN / EMI PAYMENT TRACKING ===
+    // Each loan or credit-card account can have many installments, each
+    // independently marked paid/due/overdue — this is what lets "multiple
+    // EMIs, some paid, some not" be tracked per loan, across many loans.
+
+    async getLoanPayments(accountId?: string): Promise<LoanPayment[]> {
+        const rows = accountId
+            ? await this.query<LoanPayment>('SELECT * FROM loan_payments WHERE accountId = ? ORDER BY dueDate ASC', [accountId])
+            : await this.query<LoanPayment>('SELECT * FROM loan_payments ORDER BY dueDate ASC');
+        const now = new Date().toISOString().slice(0, 10);
+        return rows.map(r => r.status === 'due' && r.dueDate.slice(0, 10) < now ? { ...r, status: 'overdue' as const } : r);
+    }
+
+    async createLoanPayment(payment: Omit<LoanPayment, 'id' | 'createdAt' | 'status' | 'paidDate'>): Promise<string> {
+        const id = crypto.randomUUID();
+        const now = new Date().toISOString();
+        await this.exec(
+            `INSERT INTO loan_payments (id, accountId, dueDate, amount, status, notes, createdAt)
+       VALUES (?, ?, ?, ?, 'due', ?, ?)`,
+            [id, payment.accountId, payment.dueDate, payment.amount, payment.notes || null, now]
+        );
+        return id;
+    }
+
+    /**
+     * Auto-generates the next `count` monthly installments for a loan account
+     * from its emiAmount, starting the month after the latest existing
+     * installment (or the account's dueDate if it has none yet) — so a whole
+     * EMI schedule can be tracked without manually adding each one.
+     */
+    async generateLoanPaymentSchedule(accountId: string, count: number): Promise<void> {
+        const account = await this.getAccountById(accountId);
+        if (!account || !account.emiAmount) throw new Error('Account has no EMI amount set');
+
+        const existing = await this.query<LoanPayment>('SELECT * FROM loan_payments WHERE accountId = ? ORDER BY dueDate DESC LIMIT 1', [accountId]);
+        const start = new Date(existing[0]?.dueDate || account.dueDate || new Date().toISOString());
+        if (existing.length > 0) start.setMonth(start.getMonth() + 1);
+
+        for (let i = 0; i < count; i++) {
+            const due = new Date(start);
+            due.setMonth(due.getMonth() + i);
+            await this.createLoanPayment({ accountId, dueDate: due.toISOString(), amount: account.emiAmount });
+        }
+    }
+
+    async markLoanPaymentPaid(id: string, paid: boolean): Promise<void> {
+        await this.exec(
+            `UPDATE loan_payments SET status = ?, paidDate = ? WHERE id = ?`,
+            [paid ? 'paid' : 'due', paid ? new Date().toISOString() : null, id]
+        );
+    }
+
+    async deleteLoanPayment(id: string): Promise<void> {
+        await this.exec('DELETE FROM loan_payments WHERE id = ?', [id]);
     }
 
     /**
