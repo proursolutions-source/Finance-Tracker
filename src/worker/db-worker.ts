@@ -15,9 +15,18 @@ let db: Database | null = null;
 let SQL: any = null;
 
 // IndexedDB for persistence
-const DB_NAME = 'moneyflow-db';
+// DB_NAME is mutable: initDatabase() rewrites it to a per-account name
+// ("moneyflow-db-<cloud user id>") when a cloud account is signed in, so a
+// shared browser/device can't mix two different people's financial data.
+// LEGACY_DB_NAME stays fixed — it's the single pre-this-feature database
+// name every install used to share, kept around only so the very first
+// account to boot after this update can inherit its own pre-existing data
+// (see migrateLegacyDatabaseIfOwned below).
+let DB_NAME = 'moneyflow-db';
+const LEGACY_DB_NAME = 'moneyflow-db';
 const DB_STORE = 'database';
 const RECEIPT_STORE = 'receipts';
+const MIGRATION_OWNER_KEY = 'migrated-owner';
 // Bumped from 1 to 2 to create both object stores up front. IMPORTANT: every
 // indexedDB.open(DB_NAME, ...) call in this file MUST use this same constant —
 // opening with a lower version than the database's current version throws a
@@ -93,6 +102,71 @@ async function saveToIndexedDB(data: Uint8Array): Promise<void> {
 }
 
 /**
+ * Reads a value from the fixed legacy database's store, regardless of what
+ * DB_NAME currently points at. Used only by the one-time per-account
+ * migration below.
+ */
+async function readLegacyStoreValue(key: string): Promise<any> {
+    return new Promise((resolve, reject) => {
+        const request = indexedDB.open(LEGACY_DB_NAME, DB_VERSION);
+        request.onerror = () => reject(request.error);
+        request.onupgradeneeded = (event) => {
+            const idb = (event.target as IDBOpenDBRequest).result;
+            if (!idb.objectStoreNames.contains(DB_STORE)) idb.createObjectStore(DB_STORE);
+            if (!idb.objectStoreNames.contains(RECEIPT_STORE)) idb.createObjectStore(RECEIPT_STORE);
+        };
+        request.onsuccess = () => {
+            const idb = request.result;
+            const tx = idb.transaction([DB_STORE], 'readonly');
+            const getRequest = tx.objectStore(DB_STORE).get(key);
+            getRequest.onsuccess = () => resolve(getRequest.result ?? null);
+            getRequest.onerror = () => reject(getRequest.error);
+        };
+    });
+}
+
+async function writeLegacyStoreValue(key: string, value: any): Promise<void> {
+    return new Promise((resolve, reject) => {
+        const request = indexedDB.open(LEGACY_DB_NAME, DB_VERSION);
+        request.onerror = () => reject(request.error);
+        request.onsuccess = () => {
+            const idb = request.result;
+            const tx = idb.transaction([DB_STORE], 'readwrite');
+            const putRequest = tx.objectStore(DB_STORE).put(value, key);
+            putRequest.onsuccess = () => resolve();
+            putRequest.onerror = () => reject(putRequest.error);
+        };
+    });
+}
+
+/**
+ * One-time migration for existing installs: before every local database was
+ * scoped per cloud account, everyone shared the single LEGACY_DB_NAME
+ * database. The first cloud account to boot after this update "claims" that
+ * pre-existing data (a marker is written so it's never handed out twice —
+ * a second, different account on the same browser starts empty instead of
+ * also inheriting the first account's data, which is exactly the bug this
+ * whole migration exists to close). Fully-offline installs (no dbNamespace)
+ * never go through this — they keep using LEGACY_DB_NAME directly, unchanged.
+ */
+async function migrateLegacyDatabaseIfOwned(dbNamespace: string): Promise<Uint8Array | null> {
+    try {
+        const existingOwner = await readLegacyStoreValue(MIGRATION_OWNER_KEY);
+        if (existingOwner) return null; // already claimed by some account — don't hand it out again
+
+        const legacyData = await readLegacyStoreValue('data');
+        if (!legacyData) return null; // nothing to migrate (e.g. a brand-new install)
+
+        await writeLegacyStoreValue(MIGRATION_OWNER_KEY, dbNamespace);
+        console.log('[DB Worker] Migrated pre-existing shared database to account-scoped storage');
+        return legacyData;
+    } catch (error) {
+        console.warn('[DB Worker] Legacy database migration check failed (starting fresh):', error);
+        return null;
+    }
+}
+
+/**
  * Save database to IndexedDB
  */
 async function saveDatabase(): Promise<void> {
@@ -102,11 +176,15 @@ async function saveDatabase(): Promise<void> {
 }
 
 /**
- * Initialize SQL.js database
+ * Initialize SQL.js database. `dbNamespace` (the signed-in cloud account's
+ * id) scopes storage to that account; omitted, it falls back to the single
+ * shared legacy database name (fully-offline mode, where there's no concept
+ * of a signed-in account to scope by).
  */
-async function initDatabase(): Promise<void> {
+async function initDatabase(dbNamespace?: string): Promise<void> {
     try {
-        console.log('[DB Worker] Initializing SQL.js...');
+        DB_NAME = dbNamespace ? `moneyflow-db-${dbNamespace}` : LEGACY_DB_NAME;
+        console.log('[DB Worker] Initializing SQL.js...', dbNamespace ? `(account-scoped: ${DB_NAME})` : '(legacy shared database)');
 
         // Initialize SQL.js. The wasm binary is bundled locally (public/sql-wasm.wasm,
         // copied from node_modules/sql.js/dist at build time) rather than fetched from
@@ -120,7 +198,14 @@ async function initDatabase(): Promise<void> {
         console.log('[DB Worker] SQL.js loaded');
 
         // Try to load existing database from IndexedDB
-        const savedData = await loadFromIndexedDB();
+        let savedData = await loadFromIndexedDB();
+
+        // First boot for this account under the new per-account naming: see
+        // if there's pre-existing shared data from before this migration
+        // that hasn't been claimed by a different account already.
+        if (!savedData && dbNamespace) {
+            savedData = await migrateLegacyDatabaseIfOwned(dbNamespace);
+        }
 
         if (savedData) {
             db = new SQL.Database(savedData);
@@ -870,7 +955,7 @@ async function readBlobFromStorage(path: string): Promise<ArrayBuffer> {
  * Message handler - processes messages from main thread
  */
 self.onmessage = async (event: MessageEvent<WorkerMessage>) => {
-    const { type, sql, params, ops, path, data, requestId } = event.data;
+    const { type, sql, params, ops, path, data, requestId, dbNamespace } = event.data;
 
     const response: WorkerResponse = {
         requestId,
@@ -880,7 +965,7 @@ self.onmessage = async (event: MessageEvent<WorkerMessage>) => {
     try {
         switch (type) {
             case 'init':
-                await initDatabase();
+                await initDatabase(dbNamespace);
                 response.success = true;
                 break;
 

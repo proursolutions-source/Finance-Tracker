@@ -6,6 +6,7 @@
 # Build output
 dist/
 release/
+.vite/
 
 # Dependencies - never commit, always installed fresh (committing these
 # breaks clean installs on Linux/CI: Windows-committed binaries lose their

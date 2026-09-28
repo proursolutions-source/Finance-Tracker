@@ -175,6 +175,7 @@ async function initApp(): Promise<void> {
     // they're checked before anything else loads. Admins bypass maintenance
     // mode so they can still get in to turn it back off.
     let cloudOnboardingComplete = false;
+    let cloudUserId: string | undefined;
     if (isCloudConfigured()) {
         const [flags, isAdmin, cloudProfile] = await Promise.all([
             getFeatureFlags().catch(() => ({} as Record<string, boolean>)),
@@ -183,6 +184,7 @@ async function initApp(): Promise<void> {
         ]);
         setAdminCache(isAdmin);
         cloudOnboardingComplete = cloudProfile?.onboardingComplete ?? false;
+        cloudUserId = cloudProfile?.id;
         if ((flags.maintenance_mode && !isAdmin) || cloudProfile?.status === 'suspended') {
             const loadingScreen = document.getElementById('loading-screen');
             const appContainer = document.getElementById('app');
@@ -206,7 +208,7 @@ async function initApp(): Promise<void> {
     await refreshEntitlement();
 
     // Initialize database
-    await db.init();
+    await db.init(cloudUserId);
     console.log('[App] Database initialized');
 
     // Cross-device sync (accounts/categories/transactions/budgets/goals/

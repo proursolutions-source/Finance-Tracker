@@ -141,8 +141,12 @@
 
   /* Belt-and-suspenders alongside color-scheme above: Chromium applies
      author background/color on <option> elements directly, so pin them to
-     the theme's actual surface color instead of leaving them at the UA default. */
-  select.glass-input option {
+     the theme's actual surface color instead of leaving them at the UA default.
+     Applies to every <select>, not just ones using the glass-input class —
+     several pages (e.g. the Net Worth account-type picker) style their
+     <select> with raw Tailwind utility classes instead, and would otherwise
+     keep showing an unstyled white native dropdown list. */
+  select option {
     background-color: var(--color-bg-secondary);
     color: var(--color-text-primary);
   }

@@ -139,6 +139,10 @@ export interface WorkerMessage {
     path?: string;
     data?: ArrayBuffer | Uint8Array;
     requestId?: string;
+    /** Cloud account id, when signed in — scopes the local database to this
+     * account so a shared browser/device can't mix two different people's
+     * financial data. Omitted entirely in fully-offline (no cloud) mode. */
+    dbNamespace?: string;
 }
 
 export interface WorkerResponse {

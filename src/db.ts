@@ -14,9 +14,13 @@ class DatabaseAPI {
     private initPromise: Promise<void> | null = null;
 
     /**
-     * Initialize the database worker
+     * Initialize the database worker. `dbNamespace` (the signed-in cloud
+     * account's id) scopes the local database to that account, so a shared
+     * browser/device can't mix two different people's financial data —
+     * omit it for fully-offline (no cloud) mode, which keeps a single
+     * device-wide database as before.
      */
-    async init(): Promise<void> {
+    async init(dbNamespace?: string): Promise<void> {
         if (this.initPromise) {
             return this.initPromise;
         }
@@ -46,7 +50,7 @@ class DatabaseAPI {
                 };
 
                 // Send init message
-                this.sendMessage({ type: 'init' })
+                this.sendMessage({ type: 'init', dbNamespace })
                     .then(() => {
                         console.log('[DB API] Database initialized');
                         resolve();
