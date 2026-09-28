@@ -5,7 +5,7 @@
     "type": "module",
     "scripts": {
         "dev": "vite",
-        "build": "vite build",
+        "build": "node scripts/check-env.cjs && vite build",
         "preview": "vite preview",
         "electron": "electron electron/main.cjs",
         "electron:build": "vite build && electron-builder"
