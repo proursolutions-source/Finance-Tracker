@@ -525,16 +525,16 @@ class DatabaseAPI {
         return this.query('SELECT * FROM accounts ORDER BY type, name');
     }
 
-    async createAccount(account: { name: string; type: string; balance: number; notes?: string; interestRate?: number; creditLimit?: number; dueDate?: string; emiAmount?: number; status?: 'open' | 'closed' }): Promise<string> {
+    async createAccount(account: { name: string; type: string; balance: number; notes?: string; interestRate?: number; creditLimit?: number; dueDate?: string; emiAmount?: number; status?: 'open' | 'closed'; contributionAmount?: number; contributionFrequency?: 'weekly' | 'monthly'; durationPeriods?: number; maturityDate?: string; maturityValue?: number }): Promise<string> {
         const id = crypto.randomUUID();
         await this.exec(
-            `INSERT INTO accounts (id, name, type, balance, notes, interestRate, creditLimit, dueDate, emiAmount, status, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-            [id, account.name, account.type, account.balance, account.notes || null, account.interestRate || 0, account.creditLimit || null, account.dueDate || null, account.emiAmount || null, account.status || 'open', new Date().toISOString()]
+            `INSERT INTO accounts (id, name, type, balance, notes, interestRate, creditLimit, dueDate, emiAmount, status, updatedAt, contributionAmount, contributionFrequency, durationPeriods, maturityDate, maturityValue) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [id, account.name, account.type, account.balance, account.notes || null, account.interestRate || 0, account.creditLimit || null, account.dueDate || null, account.emiAmount || null, account.status || 'open', new Date().toISOString(), account.contributionAmount ?? null, account.contributionFrequency || null, account.durationPeriods ?? null, account.maturityDate || null, account.maturityValue ?? null]
         );
         return id;
     }
 
-    async updateAccount(id: string, updates: Partial<{ name: string; type: string; balance: number; notes: string; interestRate: number; creditLimit: number; dueDate: string; emiAmount: number; status: 'open' | 'closed' }>): Promise<void> {
+    async updateAccount(id: string, updates: Partial<{ name: string; type: string; balance: number; notes: string; interestRate: number; creditLimit: number; dueDate: string; emiAmount: number; status: 'open' | 'closed'; contributionAmount: number; contributionFrequency: 'weekly' | 'monthly'; durationPeriods: number; maturityDate: string; maturityValue: number }>): Promise<void> {
         const fields: string[] = [];
         const values: any[] = [];
         Object.entries(updates).forEach(([key, value]) => {
@@ -582,24 +582,41 @@ class DatabaseAPI {
     }
 
     /**
-     * Auto-generates the next `count` monthly installments for a loan account
-     * from its emiAmount, starting the month after the latest existing
-     * installment (or the account's dueDate if it has none yet) — so a whole
-     * EMI schedule can be tracked without manually adding each one.
+     * Auto-generates `count` monthly installments for a loan account.
+     * `startDate` (if given) is used as the first installment's due date;
+     * otherwise falls back to the month after the latest existing
+     * installment, else the account's dueDate, else today. `amount` (if
+     * given) overrides the account's emiAmount for every generated row.
      */
-    async generateLoanPaymentSchedule(accountId: string, count: number): Promise<void> {
+    async generateLoanPaymentSchedule(accountId: string, count: number, startDate?: string, amount?: number): Promise<void> {
         const account = await this.getAccountById(accountId);
         if (!account || !account.emiAmount) throw new Error('Account has no EMI amount set');
 
-        const existing = await this.query<LoanPayment>('SELECT * FROM loan_payments WHERE accountId = ? ORDER BY dueDate DESC LIMIT 1', [accountId]);
-        const start = new Date(existing[0]?.dueDate || account.dueDate || new Date().toISOString());
-        if (existing.length > 0) start.setMonth(start.getMonth() + 1);
+        let start: Date;
+        if (startDate) {
+            start = new Date(startDate);
+        } else {
+            const existing = await this.query<LoanPayment>('SELECT * FROM loan_payments WHERE accountId = ? ORDER BY dueDate DESC LIMIT 1', [accountId]);
+            start = new Date(existing[0]?.dueDate || account.dueDate || new Date().toISOString());
+            if (existing.length > 0) start.setMonth(start.getMonth() + 1);
+        }
 
+        const emiAmount = amount ?? account.emiAmount;
         for (let i = 0; i < count; i++) {
             const due = new Date(start);
             due.setMonth(due.getMonth() + i);
-            await this.createLoanPayment({ accountId, dueDate: due.toISOString(), amount: account.emiAmount });
+            await this.createLoanPayment({ accountId, dueDate: due.toISOString(), amount: emiAmount });
         }
+    }
+
+    async updateLoanPayment(id: string, updates: { dueDate?: string; amount?: number }): Promise<void> {
+        const fields: string[] = [];
+        const values: any[] = [];
+        if (updates.dueDate !== undefined) { fields.push('dueDate = ?'); values.push(updates.dueDate); }
+        if (updates.amount !== undefined) { fields.push('amount = ?'); values.push(updates.amount); }
+        if (fields.length === 0) return;
+        values.push(id);
+        await this.exec(`UPDATE loan_payments SET ${fields.join(', ')} WHERE id = ?`, values);
     }
 
     async markLoanPaymentPaid(id: string, paid: boolean): Promise<void> {

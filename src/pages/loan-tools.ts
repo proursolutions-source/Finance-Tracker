@@ -5,11 +5,11 @@
  * client-side math, no new data model beyond what already exists.
  */
 import { db } from '../db';
-import { formatCurrency, formatDate, getIcon, escapeHtml } from '../utils';
+import { formatCurrency, formatDate, getIcon, escapeHtml, dateInputToISO } from '../utils';
 import { withTierGate } from '../components/upgrade-gate';
 import { showToast } from '../components/toast';
-import { showConfirm } from '../components/modal';
-import type { Account, LendingRecord } from '../types';
+import { showConfirm, showModal } from '../components/modal';
+import type { Account, LendingRecord, LoanPayment } from '../types';
 
 export async function renderLoanTools(): Promise<void> {
     return withTierGate('pro', 'Loan & Debt Tools', renderLoanToolsImpl);
@@ -324,7 +324,7 @@ async function renderEmiTracker(content: HTMLElement): Promise<void> {
             <p class="text-xs text-slate-500">${payments.length} installment${payments.length === 1 ? '' : 's'} tracked &middot; ${paidCount} paid${overdueCount > 0 ? ` &middot; <span class="text-red-400">${overdueCount} overdue</span>` : ''}</p>
           </div>
           <div class="flex gap-2">
-            ${acc.emiAmount ? `<button class="generate-schedule-btn glass-button-secondary text-xs" data-account-id="${acc.id}">+ Generate 12 installments</button>` : ''}
+            ${acc.emiAmount ? `<button class="generate-schedule-btn glass-button-secondary text-xs" data-account-id="${acc.id}">+ Generate Installments</button>` : ''}
             <button class="toggle-status-btn glass-button-secondary text-xs" data-account-id="${acc.id}" data-current-status="${isClosed ? 'closed' : 'open'}">${isClosed ? 'Reopen' : 'Mark Closed'}</button>
           </div>
         </div>
@@ -338,7 +338,8 @@ async function renderEmiTracker(content: HTMLElement): Promise<void> {
                   <span class="${p.status === 'overdue' ? 'text-red-400' : 'text-slate-400'}">${p.status === 'overdue' ? '(overdue)' : ''}</span>
                 </label>
                 <span class="font-medium">${formatCurrency(p.amount)}</span>
-                <button class="delete-payment-btn text-slate-500 hover:text-red-400 ml-3" data-id="${p.id}">${getIcon('x', 14)}</button>
+                <button class="edit-payment-btn text-slate-500 hover:text-primary-400 ml-3" data-id="${p.id}" data-due-date="${p.dueDate}" data-amount="${p.amount}">${getIcon('pencil', 14)}</button>
+                <button class="delete-payment-btn text-slate-500 hover:text-red-400 ml-1.5" data-id="${p.id}">${getIcon('x', 14)}</button>
               </div>
             `).join('')}
           </div>
@@ -348,15 +349,11 @@ async function renderEmiTracker(content: HTMLElement): Promise<void> {
     }).join('');
 
     content.querySelectorAll<HTMLButtonElement>('.generate-schedule-btn').forEach(btn => {
-        btn.addEventListener('click', async () => {
-            try {
-                await db.generateLoanPaymentSchedule(btn.dataset.accountId!, 12);
-                showToast('12 installments generated', { type: 'success' });
-                renderLoanTools();
-            } catch (error) {
-                console.error(error);
-                showToast('Failed to generate schedule', { type: 'error' });
-            }
+        btn.addEventListener('click', () => {
+            const accountId = btn.dataset.accountId!;
+            const account = accounts.find(a => a.id === accountId)!;
+            const accountPayments = allPayments.filter(p => p.accountId === accountId);
+            openGenerateScheduleModal(account, accountPayments);
         });
     });
 
@@ -385,4 +382,95 @@ async function renderEmiTracker(content: HTMLElement): Promise<void> {
             });
         });
     });
+
+    content.querySelectorAll<HTMLButtonElement>('.edit-payment-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            openEditInstallmentModal(btn.dataset.id!, btn.dataset.dueDate!, parseFloat(btn.dataset.amount!));
+        });
+    });
+}
+
+/** Prompts for month count + first installment date (+ EMI amount override) before generating a schedule. */
+function openGenerateScheduleModal(account: Account, existingPayments: LoanPayment[]): void {
+    const latest = [...existingPayments].sort((a, b) => b.dueDate.localeCompare(a.dueDate))[0];
+    const suggestedStart = new Date(latest?.dueDate || account.dueDate || new Date().toISOString());
+    if (latest) suggestedStart.setMonth(suggestedStart.getMonth() + 1);
+
+    const html = `
+      <div class="space-y-4">
+        <div>
+          <label class="block text-sm text-slate-400 mb-1">Number of months</label>
+          <input type="number" id="gen-count" class="glass-input w-full" value="12" min="1" step="1">
+        </div>
+        <div>
+          <label class="block text-sm text-slate-400 mb-1">First installment date</label>
+          <input type="date" id="gen-start-date" class="glass-input w-full" value="${suggestedStart.toISOString().slice(0, 10)}">
+        </div>
+        <div>
+          <label class="block text-sm text-slate-400 mb-1">EMI amount (₹)</label>
+          <input type="number" id="gen-amount" class="glass-input w-full" value="${account.emiAmount || ''}" min="0" step="1">
+        </div>
+        <div class="flex gap-3 pt-2">
+          <button id="gen-submit" class="glass-button flex-1">Generate</button>
+          <button id="gen-cancel" class="glass-button-secondary">Cancel</button>
+        </div>
+      </div>
+    `;
+    const closeModal = showModal({ title: 'Generate Installments', content: html });
+
+    document.getElementById('gen-submit')?.addEventListener('click', async () => {
+        const count = parseInt((document.getElementById('gen-count') as HTMLInputElement).value, 10);
+        const startDateRaw = (document.getElementById('gen-start-date') as HTMLInputElement).value;
+        const amountRaw = (document.getElementById('gen-amount') as HTMLInputElement).value;
+        if (!count || count < 1 || !startDateRaw) { showToast('Enter a valid month count and start date', { type: 'error' }); return; }
+
+        try {
+            await db.generateLoanPaymentSchedule(
+                account.id,
+                count,
+                dateInputToISO(startDateRaw),
+                amountRaw ? parseFloat(amountRaw) : undefined
+            );
+            showToast(`${count} installment${count === 1 ? '' : 's'} generated`, { type: 'success' });
+            closeModal();
+            renderLoanTools();
+        } catch (error) {
+            console.error(error);
+            showToast('Failed to generate schedule', { type: 'error' });
+        }
+    });
+    document.getElementById('gen-cancel')?.addEventListener('click', () => closeModal());
+}
+
+/** Lets a single already-generated installment's date/amount be adjusted. */
+function openEditInstallmentModal(id: string, dueDate: string, amount: number): void {
+    const html = `
+      <div class="space-y-4">
+        <div>
+          <label class="block text-sm text-slate-400 mb-1">Due date</label>
+          <input type="date" id="edit-due-date" class="glass-input w-full" value="${dueDate.slice(0, 10)}">
+        </div>
+        <div>
+          <label class="block text-sm text-slate-400 mb-1">Amount (₹)</label>
+          <input type="number" id="edit-amount" class="glass-input w-full" value="${amount}" min="0" step="1">
+        </div>
+        <div class="flex gap-3 pt-2">
+          <button id="edit-submit" class="glass-button flex-1">Save</button>
+          <button id="edit-cancel" class="glass-button-secondary">Cancel</button>
+        </div>
+      </div>
+    `;
+    const closeModal = showModal({ title: 'Edit Installment', content: html });
+
+    document.getElementById('edit-submit')?.addEventListener('click', async () => {
+        const dueDateRaw = (document.getElementById('edit-due-date') as HTMLInputElement).value;
+        const amountRaw = (document.getElementById('edit-amount') as HTMLInputElement).value;
+        if (!dueDateRaw || !amountRaw) { showToast('Date and amount required', { type: 'error' }); return; }
+
+        await db.updateLoanPayment(id, { dueDate: dateInputToISO(dueDateRaw), amount: parseFloat(amountRaw) });
+        showToast('Installment updated', { type: 'success' });
+        closeModal();
+        renderLoanTools();
+    });
+    document.getElementById('edit-cancel')?.addEventListener('click', () => closeModal());
 }

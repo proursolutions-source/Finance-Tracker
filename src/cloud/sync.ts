@@ -38,7 +38,7 @@ const SYNC_TABLES: SyncTableDef[] = [
     },
     {
         local: 'accounts', cloud: 'sync_accounts',
-        columns: ['name', 'type', 'balance', 'asOfDate', 'notes', 'interestRate', 'creditLimit', 'dueDate', 'emiAmount', 'status', 'createdAt', 'updatedAt'],
+        columns: ['name', 'type', 'balance', 'asOfDate', 'notes', 'interestRate', 'creditLimit', 'dueDate', 'emiAmount', 'status', 'createdAt', 'updatedAt', 'contributionAmount', 'contributionFrequency', 'durationPeriods', 'maturityDate', 'maturityValue'],
     },
     {
         local: 'transactions', cloud: 'sync_transactions',
@@ -79,23 +79,30 @@ function setLastSyncedAt(iso: string): void {
     } catch { /* ignore */ }
 }
 
-let syncInFlight: Promise<void> | null = null;
+let syncInFlight: Promise<boolean> | null = null;
 
-/** Safe to call often — concurrent calls collapse into the single in-flight run. */
-export async function runSync(): Promise<void> {
+/**
+ * Safe to call often — concurrent calls collapse into the single in-flight
+ * run. Returns whether the sync actually completed successfully (false
+ * means "check your connection" is warranted) — deliberately NOT gated on
+ * `navigator.onLine`, which is known to report stale/incorrect values
+ * inside Capacitor's Android WebView, silently skipping every sync while
+ * still looking like success to the caller.
+ */
+export async function runSync(): Promise<boolean> {
     if (syncInFlight) return syncInFlight;
     syncInFlight = doSync().finally(() => { syncInFlight = null; });
     return syncInFlight;
 }
 
-async function doSync(): Promise<void> {
-    if (!isCloudConfigured() || !navigator.onLine) return;
+async function doSync(): Promise<boolean> {
+    if (!isCloudConfigured()) return true;
 
     const { supabase } = await import('../lib/supabase');
-    if (!supabase) return;
+    if (!supabase) return true;
 
     const user = await getCloudUser();
-    if (!user) return;
+    if (!user) return true;
 
     const since = getLastSyncedAt() ?? '1970-01-01T00:00:00.000Z';
     const syncStartedAt = new Date().toISOString();
@@ -113,6 +120,7 @@ async function doSync(): Promise<void> {
     // whatever failed to push (its updatedAt would now be older than the
     // new "since", so a future sync would never look at it again).
     if (allOk) setLastSyncedAt(syncStartedAt);
+    return allOk;
 }
 
 function toCloudValue(value: any, isBool: boolean): any {

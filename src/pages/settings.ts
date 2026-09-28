@@ -260,8 +260,12 @@ export async function renderSettings(): Promise<void> {
                 syncNowBtn.disabled = true;
                 syncNowBtn.textContent = 'Syncing...';
                 try {
-                    await runSync();
-                    showToast('Synced', { type: 'success' });
+                    const ok = await runSync();
+                    if (ok) {
+                        showToast('Synced', { type: 'success' });
+                    } else {
+                        showToast('Sync had issues — check your connection and try again', { type: 'error' });
+                    }
                 } catch (error) {
                     console.error(error);
                     showToast('Sync failed — check your connection', { type: 'error' });

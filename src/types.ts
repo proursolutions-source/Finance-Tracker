@@ -209,7 +209,7 @@ export interface Goal {
 export interface Account {
     id: string;
     name: string;
-    type: 'savings' | 'fd' | 'ppf' | 'epf' | 'mutual-fund' | 'stocks' | 'gold' | 'property' | 'credit-card' | 'loan' | 'other';
+    type: 'savings' | 'fd' | 'ppf' | 'epf' | 'mutual-fund' | 'stocks' | 'gold' | 'property' | 'recurring-deposit' | 'chit-fund' | 'credit-card' | 'loan' | 'other';
     balance: number;
     asOfDate: string;
     notes?: string;
@@ -218,6 +218,13 @@ export interface Account {
     dueDate?: string; // credit-card (next bill due) or loan (next EMI due)
     emiAmount?: number; // loan only: the recurring EMI amount
     status: 'open' | 'closed'; // loan/credit-card: whether it's still active or fully paid off/closed
+    // recurring-deposit / chit-fund only — periodic contribution + eventual payout.
+    // balance stays a manually-updated running valuation, same as fd/ppf/mutual-fund.
+    contributionAmount?: number;
+    contributionFrequency?: 'weekly' | 'monthly';
+    durationPeriods?: number;
+    maturityDate?: string; // RD maturity date / chit payout date
+    maturityValue?: number; // RD expected maturity value / chit expected-or-actual payout
 }
 
 // A single EMI/installment due date on a loan or credit-card account.

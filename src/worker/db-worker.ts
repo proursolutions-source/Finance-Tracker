@@ -769,6 +769,52 @@ async function migrateSchema(): Promise<void> {
         `);
         console.log('[DB Worker] ✅ Sync migration complete (updatedAt columns + sync_tombstones)');
 
+        // 17. Recurring Deposit / Chit Fund account types + their tenure/
+        // maturity fields. accounts.type carries a CHECK(type IN (...))
+        // constraint from table creation that SQLite can't alter in place,
+        // so the table is recreated without it (validation for new/old
+        // values already happens at the app layer via ACCOUNT_TYPES) — this
+        // also means future new account types won't need this again.
+        try {
+            const info = db.exec("SELECT sql FROM sqlite_master WHERE type='table' AND name='accounts'");
+            const currentSql = info[0]?.values?.[0]?.[0] as string | undefined;
+            if (currentSql && currentSql.includes('CHECK(type IN')) {
+                console.log('[DB Worker] Migrating accounts table (recurring-deposit/chit-fund types + tenure/maturity fields)...');
+                db.run('PRAGMA foreign_keys=OFF');
+                db.run(`
+                CREATE TABLE accounts_new (
+                  id TEXT PRIMARY KEY,
+                  name TEXT NOT NULL,
+                  type TEXT,
+                  balance REAL NOT NULL,
+                  asOfDate TEXT DEFAULT (strftime('%Y-%m-%d', 'now')),
+                  notes TEXT,
+                  interestRate REAL DEFAULT 0,
+                  creditLimit REAL,
+                  dueDate TEXT,
+                  emiAmount REAL,
+                  status TEXT NOT NULL DEFAULT 'open',
+                  updatedAt TEXT,
+                  contributionAmount REAL,
+                  contributionFrequency TEXT,
+                  durationPeriods INTEGER,
+                  maturityDate TEXT,
+                  maturityValue REAL
+                );
+                `);
+                db.run(`
+                INSERT INTO accounts_new (id, name, type, balance, asOfDate, notes, interestRate, creditLimit, dueDate, emiAmount, status, updatedAt)
+                SELECT id, name, type, balance, asOfDate, notes, interestRate, creditLimit, dueDate, emiAmount, status, updatedAt FROM accounts;
+                `);
+                db.run('DROP TABLE accounts');
+                db.run('ALTER TABLE accounts_new RENAME TO accounts');
+                db.run('PRAGMA foreign_keys=ON');
+                console.log('[DB Worker] ✅ Accounts table migrated');
+            }
+        } catch (e) {
+            console.error('[DB Worker] accounts type-CHECK migration failed', e);
+        }
+
         console.log('[DB Worker] 🎉 Migration v2 COMPLETE! All new tables created successfully!');
 
     } catch (error) {

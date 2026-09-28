@@ -18,6 +18,8 @@ const ACCOUNT_TYPES = [
   { value: 'stocks', label: 'Stocks', icon: 'bar-chart-2', group: 'asset' },
   { value: 'gold', label: 'Gold', icon: 'circle', group: 'asset' },
   { value: 'property', label: 'Property', icon: 'home', group: 'asset' },
+  { value: 'recurring-deposit', label: 'Recurring Deposit', icon: 'calendar', group: 'asset' },
+  { value: 'chit-fund', label: 'Chit Fund', icon: 'users', group: 'asset' },
   { value: 'other', label: 'Other Asset', icon: 'box', group: 'asset' },
   { value: 'credit-card', label: 'Credit Card', icon: 'credit-card', group: 'liability' },
   { value: 'loan', label: 'Loan', icon: 'file-text', group: 'liability' },
@@ -116,6 +118,9 @@ async function renderNetWorthImpl(): Promise<void> {
                 <div>
                   <p class="font-medium text-white">${escapeHtml(a.name)}</p>
                   <p class="text-xs text-gray-400">${meta?.label || a.type}${a.interestRate ? ` · ${a.interestRate}% p.a.` : ''}</p>
+                  ${['recurring-deposit', 'chit-fund'].includes(a.type) && (a.maturityDate || a.maturityValue) ? `
+                  <p class="text-xs text-cyan-400 mt-0.5">${a.type === 'chit-fund' ? 'Payout' : 'Matures'}${a.maturityDate ? ` ${formatDate(a.maturityDate)}` : ''}${a.maturityValue ? ` · ${formatCurrency(a.maturityValue)}` : ''}</p>
+                  ` : ''}
                 </div>
               </div>
               <div class="flex items-center gap-3">
@@ -385,6 +390,31 @@ async function openAccountModal(existing?: any): Promise<void> {
           </select>
         </div>
       </div>
+      <div id="acc-savings-fields" class="grid grid-cols-2 gap-3 ${existing && !['recurring-deposit', 'chit-fund'].includes(existing.type) ? 'hidden' : ''}">
+        <div>
+          <label class="block text-sm text-gray-400 mb-1">Contribution Amount (₹)</label>
+          <input type="number" id="acc-contribution" class="w-full px-4 py-3 rounded-xl bg-white/10 border border-white/20 text-white" value="${existing?.contributionAmount || ''}" step="1" min="0">
+        </div>
+        <div>
+          <label class="block text-sm text-gray-400 mb-1">Frequency</label>
+          <select id="acc-frequency" class="w-full px-4 py-3 rounded-xl bg-white/10 border border-white/20 text-white">
+            <option value="monthly" ${(existing?.contributionFrequency || 'monthly') === 'monthly' ? 'selected' : ''}>Monthly</option>
+            <option value="weekly" ${existing?.contributionFrequency === 'weekly' ? 'selected' : ''}>Weekly</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-sm text-gray-400 mb-1" id="acc-duration-label">Duration (periods)</label>
+          <input type="number" id="acc-duration" class="w-full px-4 py-3 rounded-xl bg-white/10 border border-white/20 text-white" value="${existing?.durationPeriods || ''}" step="1" min="1">
+        </div>
+        <div>
+          <label class="block text-sm text-gray-400 mb-1" id="acc-maturity-value-label">Maturity Value (₹)</label>
+          <input type="number" id="acc-maturity-value" class="w-full px-4 py-3 rounded-xl bg-white/10 border border-white/20 text-white" value="${existing?.maturityValue || ''}" step="1" min="0">
+        </div>
+        <div class="col-span-2">
+          <label class="block text-sm text-gray-400 mb-1" id="acc-maturity-date-label">Maturity Date</label>
+          <input type="date" id="acc-maturity-date" class="w-full px-4 py-3 rounded-xl bg-white/10 border border-white/20 text-white" value="${existing?.maturityDate ? existing.maturityDate.split('T')[0] : ''}">
+        </div>
+      </div>
       <div>
         <label class="block text-sm text-gray-400 mb-1">Notes</label>
         <textarea id="acc-notes" class="w-full px-4 py-3 rounded-xl bg-white/10 border border-white/20 text-white" rows="2">${escapeHtml(existing?.notes)}</textarea>
@@ -406,8 +436,19 @@ async function openAccountModal(existing?: any): Promise<void> {
     document.getElementById('acc-liability-fields')?.classList.toggle('hidden', !['credit-card', 'loan'].includes(type));
     document.getElementById('acc-credit-limit-field')?.classList.toggle('hidden', type !== 'credit-card');
     document.getElementById('acc-emi-field')?.classList.toggle('hidden', type !== 'loan');
+
+    const isSavingsType = ['recurring-deposit', 'chit-fund'].includes(type);
+    document.getElementById('acc-savings-fields')?.classList.toggle('hidden', !isSavingsType);
+    const isChit = type === 'chit-fund';
+    const durationLabel = document.getElementById('acc-duration-label');
+    if (durationLabel) durationLabel.textContent = isChit ? 'Duration (periods)' : 'Duration (months)';
+    const maturityValueLabel = document.getElementById('acc-maturity-value-label');
+    if (maturityValueLabel) maturityValueLabel.textContent = isChit ? 'Payout Amount (₹)' : 'Maturity Value (₹)';
+    const maturityDateLabel = document.getElementById('acc-maturity-date-label');
+    if (maturityDateLabel) maturityDateLabel.textContent = isChit ? 'Payout Date' : 'Maturity Date';
   };
   typeSelect.addEventListener('change', toggleLiabilityFields);
+  toggleLiabilityFields();
 
   document.getElementById('save-account')?.addEventListener('click', async () => {
     const name = (document.getElementById('acc-name') as HTMLInputElement).value.trim();
@@ -421,6 +462,12 @@ async function openAccountModal(existing?: any): Promise<void> {
     const status = ['credit-card', 'loan'].includes(type)
       ? ((document.getElementById('acc-status') as HTMLSelectElement).value as 'open' | 'closed')
       : 'open';
+    const isSavingsType = ['recurring-deposit', 'chit-fund'].includes(type);
+    const contributionRaw = (document.getElementById('acc-contribution') as HTMLInputElement).value;
+    const frequency = (document.getElementById('acc-frequency') as HTMLSelectElement).value as 'weekly' | 'monthly';
+    const durationRaw = (document.getElementById('acc-duration') as HTMLInputElement).value;
+    const maturityValueRaw = (document.getElementById('acc-maturity-value') as HTMLInputElement).value;
+    const maturityDateRaw = (document.getElementById('acc-maturity-date') as HTMLInputElement).value;
 
     if (!name || isNaN(balance)) { showToast('Name and balance required', { type: 'error' }); return; }
 
@@ -429,6 +476,11 @@ async function openAccountModal(existing?: any): Promise<void> {
       emiAmount: type === 'loan' && emiRaw ? parseFloat(emiRaw) : undefined,
       dueDate: ['credit-card', 'loan'].includes(type) && dueDateRaw ? new Date(dueDateRaw).toISOString() : undefined,
       status,
+      contributionAmount: isSavingsType && contributionRaw ? parseFloat(contributionRaw) : undefined,
+      contributionFrequency: isSavingsType ? frequency : undefined,
+      durationPeriods: isSavingsType && durationRaw ? parseInt(durationRaw, 10) : undefined,
+      maturityValue: isSavingsType && maturityValueRaw ? parseFloat(maturityValueRaw) : undefined,
+      maturityDate: isSavingsType && maturityDateRaw ? new Date(maturityDateRaw).toISOString() : undefined,
     };
 
     if (isEdit) {
