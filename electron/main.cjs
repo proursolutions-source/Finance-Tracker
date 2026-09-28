@@ -17,8 +17,14 @@ const MIME_TYPES = {
   '.png': 'image/png', '.ico': 'image/x-icon', '.woff2': 'font/woff2',
 };
 
+// Fixed, not random — the app's local database lives in IndexedDB, which is
+// scoped to this exact origin (host+port). A random port per launch would
+// put every session's data under a brand-new, unreachable origin, making the
+// database look like it "resets" every time the app is reopened.
+const SERVER_PORT = 47862;
+
 function startStaticServer() {
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     const server = http.createServer((req, res) => {
       const urlPath = decodeURIComponent(req.url.split('?')[0]);
       let filePath = path.join(DIST_DIR, urlPath === '/' ? 'index.html' : urlPath);
@@ -38,7 +44,8 @@ function startStaticServer() {
         res.end(data);
       });
     });
-    server.listen(0, '127.0.0.1', () => resolve(server.address().port));
+    server.once('error', reject);
+    server.listen(SERVER_PORT, '127.0.0.1', () => resolve(SERVER_PORT));
   });
 }
 
@@ -69,14 +76,35 @@ async function createWindow() {
   });
 }
 
-app.whenReady().then(() => {
-  createWindow();
-
-  app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow();
+// A second instance would try to bind the same fixed port and could open a
+// second window writing to the same IndexedDB-backed database concurrently —
+// refuse it and just focus the existing window instead.
+const gotLock = app.requestSingleInstanceLock();
+if (!gotLock) {
+  app.quit();
+} else {
+  app.on('second-instance', () => {
+    const [win] = BrowserWindow.getAllWindows();
+    if (win) {
+      if (win.isMinimized()) win.restore();
+      win.focus();
+    }
   });
-});
 
-app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') app.quit();
-});
+  app.whenReady().then(async () => {
+    try {
+      await createWindow();
+    } catch (error) {
+      console.error('[MoneyFlow] Failed to start local server:', error);
+      app.quit();
+    }
+
+    app.on('activate', () => {
+      if (BrowserWindow.getAllWindows().length === 0) createWindow();
+    });
+  });
+
+  app.on('window-all-closed', () => {
+    if (process.platform !== 'darwin') app.quit();
+  });
+}
