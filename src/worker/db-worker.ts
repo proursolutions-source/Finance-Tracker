@@ -162,8 +162,8 @@ async function createSchema(): Promise<void> {
       payee TEXT,
       notes TEXT,
       receiptPath TEXT,
-      createdAt TEXT NOT NULL DEFAULT (datetime('now')),
-      updatedAt TEXT NOT NULL DEFAULT (datetime('now')),
+      createdAt TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+      updatedAt TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
       FOREIGN KEY (categoryId) REFERENCES categories(id)
     );
     
@@ -236,13 +236,6 @@ async function createSchema(): Promise<void> {
     FROM transactions
     GROUP BY month
     ORDER BY month DESC;
-    
-    -- Trigger to update updatedAt on transactions
-    CREATE TRIGGER IF NOT EXISTS update_transaction_timestamp 
-    AFTER UPDATE ON transactions
-    BEGIN
-      UPDATE transactions SET updatedAt = datetime('now') WHERE id = NEW.id;
-    END;
     
     -- Trigger to update updatedAt on user_profiles
     CREATE TRIGGER IF NOT EXISTS update_profile_timestamp 
@@ -639,6 +632,57 @@ async function migrateSchema(): Promise<void> {
         );
         `);
         console.log('[DB Worker] ✅ Challenges table created');
+
+        // 16. Cross-device sync — updatedAt on every synced table (so
+        // last-write-wins conflict resolution has something to compare),
+        // and a tombstone log so deletes propagate to other devices too
+        // (a plain DELETE leaves no trace for another device to pull).
+        // SQLite's ALTER TABLE ADD COLUMN rejects a non-constant DEFAULT
+        // (e.g. datetime('now')) on a NOT NULL column, so the column is
+        // added nullable and existing rows are backfilled separately.
+        //
+        // Every timestamp involved in sync comparisons (WHERE col > ?)
+        // MUST be in the same string format as JS's Date#toISOString()
+        // ("2026-09-28T05:44:35.123Z"), because they're compared as plain
+        // text — SQLite's own datetime('now') produces a *different*,
+        // space-separated format ("2026-09-28 05:44:35") that sorts before
+        // any same-year ISO string regardless of the actual time, silently
+        // breaking incremental sync. strftime with an explicit ISO format
+        // string avoids that; COALESCE'd createdAt values are re-run
+        // through the same strftime so an already-space-formatted
+        // createdAt gets normalized too, not just newly-written ones.
+        console.log('[DB Worker] Migrating tables for cross-device sync...');
+        const ISO_NOW = "strftime('%Y-%m-%dT%H:%M:%fZ','now')";
+        for (const [table, hasCreatedAt] of [
+            ['categories', true], ['budgets', true], ['reminders', true], ['goals', true],
+            ['accounts', false], ['recurrings', false],
+        ] as const) {
+            try {
+                db.exec(`SELECT updatedAt FROM ${table} LIMIT 1`);
+            } catch (e) {
+                try {
+                    db.run(`ALTER TABLE ${table} ADD COLUMN updatedAt TEXT`);
+                    const backfillExpr = hasCreatedAt
+                        ? `COALESCE(strftime('%Y-%m-%dT%H:%M:%fZ', createdAt), ${ISO_NOW})`
+                        : ISO_NOW;
+                    db.run(`UPDATE ${table} SET updatedAt = ${backfillExpr} WHERE updatedAt IS NULL`);
+                } catch (ignored) { }
+            }
+        }
+
+        // Redundant with updateTransaction() explicitly setting updatedAt,
+        // and it was writing the wrong (space-separated) format anyway.
+        try { db.run('DROP TRIGGER IF EXISTS update_transaction_timestamp'); } catch (ignored) { }
+
+        db.run(`
+        CREATE TABLE IF NOT EXISTS sync_tombstones (
+          id TEXT NOT NULL,
+          tableName TEXT NOT NULL,
+          deletedAt TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+          PRIMARY KEY (id, tableName)
+        );
+        `);
+        console.log('[DB Worker] ✅ Sync migration complete (updatedAt columns + sync_tombstones)');
 
         console.log('[DB Worker] 🎉 Migration v2 COMPLETE! All new tables created successfully!');
 

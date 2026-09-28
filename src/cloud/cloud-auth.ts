@@ -43,13 +43,38 @@ export async function signInCloud(email: string, password: string): Promise<User
 }
 
 /**
- * Starts the Google OAuth flow — this navigates the whole page away to
- * Google's consent screen and back, so it never resolves with a value here.
- * The redirect back lands on this same app URL with a session already
- * established; requireCloudAuth() picks that up on the next boot.
+ * Starts the Google OAuth flow.
+ *
+ * On the web this navigates the whole page away to Google's consent screen
+ * and back, so it never resolves with a value here — the redirect lands on
+ * this same app URL with a session already established, and
+ * requireCloudAuth() picks that up on the next boot.
+ *
+ * Inside the native Android app, Google refuses to show its sign-in page
+ * inside an embedded WebView at all, so Capacitor's WebView can't be used
+ * for this step. Instead: get the OAuth URL without navigating
+ * (`skipBrowserRedirect`), open it in a Chrome Custom Tab (`@capacitor/browser`,
+ * which Google does allow), and let `initOAuthDeepLinkListener()` in
+ * oauth-deep-link.ts catch the app coming back into the foreground via the
+ * `com.moneyflow.app://auth-callback` redirect registered in
+ * AndroidManifest.xml, exchanging the returned code for a session there.
  */
 export async function signInWithGoogle(): Promise<void> {
     const supabase = requireSupabase();
+    const { isNativePlatform } = await import('../lib/platform');
+
+    if (isNativePlatform()) {
+        const { data, error } = await supabase.auth.signInWithOAuth({
+            provider: 'google',
+            options: { redirectTo: 'com.moneyflow.app://auth-callback', skipBrowserRedirect: true },
+        });
+        if (error) throw error;
+        if (!data.url) throw new Error('Supabase did not return an OAuth URL.');
+        const { Browser } = await import('@capacitor/browser');
+        await Browser.open({ url: data.url });
+        return;
+    }
+
     const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: { redirectTo: window.location.origin + window.location.pathname },

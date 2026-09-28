@@ -107,6 +107,22 @@ class DatabaseAPI {
     }
 
     /**
+     * Records that a row was deleted, so the next cross-device sync knows to
+     * delete it on other devices too — a plain SQL DELETE leaves nothing for
+     * another device to pull. Called by every delete* method on a synced table.
+     */
+    private async tombstone(tableName: string, id: string): Promise<void> {
+        // Must be the same string format sync.ts's JS-side comparisons use
+        // (Date#toISOString()) — SQLite's own datetime('now') is a
+        // different, space-separated format that breaks "WHERE col > ?"
+        // string comparisons against a real ISO watermark.
+        await this.exec(
+            `INSERT OR REPLACE INTO sync_tombstones (id, tableName, deletedAt) VALUES (?, ?, ?)`,
+            [id, tableName, new Date().toISOString()]
+        );
+    }
+
+    /**
      * Write blob to OPFS
      */
     async writeBlob(path: string, data: ArrayBuffer | Uint8Array): Promise<void> {
@@ -221,14 +237,15 @@ class DatabaseAPI {
 
         if (fields.length === 0) return;
 
-        params.push(id);
+        params.push(new Date().toISOString(), id);
         await this.exec(
-            `UPDATE transactions SET ${fields.join(', ')}, updatedAt = datetime('now') WHERE id = ?`,
+            `UPDATE transactions SET ${fields.join(', ')}, updatedAt = ? WHERE id = ?`,
             params
         );
     }
 
     async deleteTransaction(id: string): Promise<void> {
+        await this.tombstone('transactions', id);
         await this.exec('DELETE FROM transactions WHERE id = ?', [id]);
     }
 
@@ -261,11 +278,12 @@ class DatabaseAPI {
         const id = crypto.randomUUID();
 
         await this.exec(
-            `INSERT INTO categories (id, name, type, icon, budget, hidden, color, isEssential, isFixed)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            `INSERT INTO categories (id, name, type, icon, budget, hidden, color, isEssential, isFixed, updatedAt)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [id, cat.name, cat.type, cat.icon || null, cat.budget || null, cat.hidden ? 1 : 0, cat.color || null,
             cat.isEssential === undefined ? null : (cat.isEssential ? 1 : 0),
-            cat.isFixed === undefined ? null : (cat.isFixed ? 1 : 0)]
+            cat.isFixed === undefined ? null : (cat.isFixed ? 1 : 0),
+            new Date().toISOString()]
         );
 
         return id;
@@ -287,11 +305,14 @@ class DatabaseAPI {
 
         if (fields.length === 0) return;
 
+        fields.push('updatedAt = ?');
+        params.push(new Date().toISOString());
         params.push(id);
         await this.exec(`UPDATE categories SET ${fields.join(', ')} WHERE id = ?`, params);
     }
 
     async deleteCategory(id: string): Promise<void> {
+        await this.tombstone('categories', id);
         await this.exec('DELETE FROM categories WHERE id = ?', [id]);
     }
 
@@ -305,9 +326,9 @@ class DatabaseAPI {
         const id = crypto.randomUUID();
 
         await this.exec(
-            `INSERT INTO budgets (id, categoryId, amount, period, startDate, endDate, notes, color)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-            [id, budget.categoryId, budget.amount, budget.period, budget.startDate, budget.endDate || null, budget.notes || null, budget.color || '#3b82f6']
+            `INSERT INTO budgets (id, categoryId, amount, period, startDate, endDate, notes, color, updatedAt)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [id, budget.categoryId, budget.amount, budget.period, budget.startDate, budget.endDate || null, budget.notes || null, budget.color || '#3b82f6', new Date().toISOString()]
         );
 
         return id;
@@ -324,11 +345,14 @@ class DatabaseAPI {
 
         if (fields.length === 0) return;
 
+        fields.push('updatedAt = ?');
+        params.push(new Date().toISOString());
         params.push(id);
         await this.exec(`UPDATE budgets SET ${fields.join(', ')} WHERE id = ?`, params);
     }
 
     async deleteBudget(id: string): Promise<void> {
+        await this.tombstone('budgets', id);
         await this.exec('DELETE FROM budgets WHERE id = ?', [id]);
     }
 
@@ -345,9 +369,9 @@ class DatabaseAPI {
         const id = crypto.randomUUID();
 
         await this.exec(
-            `INSERT INTO reminders (id, name, amount, dueDate, categoryId, frequency, notes, completed)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-            [id, reminder.name, reminder.amount, reminder.dueDate, reminder.categoryId || null, reminder.frequency, reminder.notes || null, reminder.completed ? 1 : 0]
+            `INSERT INTO reminders (id, name, amount, dueDate, categoryId, frequency, notes, completed, updatedAt)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [id, reminder.name, reminder.amount, reminder.dueDate, reminder.categoryId || null, reminder.frequency, reminder.notes || null, reminder.completed ? 1 : 0, new Date().toISOString()]
         );
 
         return id;
@@ -369,11 +393,14 @@ class DatabaseAPI {
 
         if (fields.length === 0) return;
 
+        fields.push('updatedAt = ?');
+        params.push(new Date().toISOString());
         params.push(id);
         await this.exec(`UPDATE reminders SET ${fields.join(', ')} WHERE id = ?`, params);
     }
 
     async deleteReminder(id: string): Promise<void> {
+        await this.tombstone('reminders', id);
         await this.exec('DELETE FROM reminders WHERE id = ?', [id]);
     }
 
@@ -458,8 +485,8 @@ class DatabaseAPI {
     async createGoal(goal: { name: string; type: string; targetAmount: number; targetDate?: string; priority?: string; linkedCategoryId?: string; notes?: string }): Promise<string> {
         const id = crypto.randomUUID();
         await this.exec(
-            `INSERT INTO goals (id, name, type, targetAmount, currentAmount, targetDate, priority, linkedCategoryId, notes) VALUES (?, ?, ?, ?, 0, ?, ?, ?, ?)`,
-            [id, goal.name, goal.type, goal.targetAmount, goal.targetDate || null, goal.priority || 'medium', goal.linkedCategoryId || null, goal.notes || null]
+            `INSERT INTO goals (id, name, type, targetAmount, currentAmount, targetDate, priority, linkedCategoryId, notes, updatedAt) VALUES (?, ?, ?, ?, 0, ?, ?, ?, ?, ?)`,
+            [id, goal.name, goal.type, goal.targetAmount, goal.targetDate || null, goal.priority || 'medium', goal.linkedCategoryId || null, goal.notes || null, new Date().toISOString()]
         );
         return id;
     }
@@ -477,11 +504,14 @@ class DatabaseAPI {
             }
         });
         if (fields.length === 0) return;
+        fields.push('updatedAt = ?');
+        values.push(new Date().toISOString());
         values.push(id);
         await this.exec(`UPDATE goals SET ${fields.join(', ')} WHERE id = ?`, values);
     }
 
     async deleteGoal(id: string): Promise<void> {
+        await this.tombstone('goals', id);
         await this.exec('DELETE FROM goals WHERE id = ?', [id]);
     }
 
@@ -494,8 +524,8 @@ class DatabaseAPI {
     async createAccount(account: { name: string; type: string; balance: number; notes?: string; interestRate?: number; creditLimit?: number; dueDate?: string; emiAmount?: number; status?: 'open' | 'closed' }): Promise<string> {
         const id = crypto.randomUUID();
         await this.exec(
-            `INSERT INTO accounts (id, name, type, balance, notes, interestRate, creditLimit, dueDate, emiAmount, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-            [id, account.name, account.type, account.balance, account.notes || null, account.interestRate || 0, account.creditLimit || null, account.dueDate || null, account.emiAmount || null, account.status || 'open']
+            `INSERT INTO accounts (id, name, type, balance, notes, interestRate, creditLimit, dueDate, emiAmount, status, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [id, account.name, account.type, account.balance, account.notes || null, account.interestRate || 0, account.creditLimit || null, account.dueDate || null, account.emiAmount || null, account.status || 'open', new Date().toISOString()]
         );
         return id;
     }
@@ -511,11 +541,14 @@ class DatabaseAPI {
         });
         if (fields.length === 0) return;
         fields.push("asOfDate = date('now')");
+        fields.push('updatedAt = ?');
+        values.push(new Date().toISOString());
         values.push(id);
         await this.exec(`UPDATE accounts SET ${fields.join(', ')} WHERE id = ?`, values);
     }
 
     async deleteAccount(id: string): Promise<void> {
+        await this.tombstone('accounts', id);
         await this.exec('DELETE FROM accounts WHERE id = ?', [id]);
         await this.exec('DELETE FROM loan_payments WHERE accountId = ?', [id]);
     }
@@ -659,8 +692,8 @@ class DatabaseAPI {
     async createRecurring(rec: { name: string; amount: number; type: string; categoryId?: string; frequency: string; startDate: string; endDate?: string; notes?: string; isSubscription?: boolean }): Promise<string> {
         const id = crypto.randomUUID();
         await this.exec(
-            `INSERT INTO recurrings (id, name, amount, type, categoryId, frequency, startDate, endDate, nextDueDate, notes, isSubscription) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-            [id, rec.name, rec.amount, rec.type, rec.categoryId || null, rec.frequency, rec.startDate, rec.endDate || null, rec.startDate, rec.notes || null, rec.isSubscription ? 1 : 0]
+            `INSERT INTO recurrings (id, name, amount, type, categoryId, frequency, startDate, endDate, nextDueDate, notes, isSubscription, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [id, rec.name, rec.amount, rec.type, rec.categoryId || null, rec.frequency, rec.startDate, rec.endDate || null, rec.startDate, rec.notes || null, rec.isSubscription ? 1 : 0, new Date().toISOString()]
         );
         return id;
     }
@@ -678,11 +711,14 @@ class DatabaseAPI {
             }
         });
         if (fields.length === 0) return;
+        fields.push('updatedAt = ?');
+        values.push(new Date().toISOString());
         values.push(id);
         await this.exec(`UPDATE recurrings SET ${fields.join(', ')} WHERE id = ?`, values);
     }
 
     async deleteRecurring(id: string): Promise<void> {
+        await this.tombstone('recurrings', id);
         await this.exec('DELETE FROM recurrings WHERE id = ?', [id]);
     }
 

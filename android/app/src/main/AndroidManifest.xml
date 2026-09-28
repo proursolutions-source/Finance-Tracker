@@ -22,6 +22,16 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
+            <!-- Brings the app back to the foreground after Google sign-in
+                 completes in an external browser (Chrome Custom Tabs), instead
+                 of leaving the user stranded on the web version in Chrome. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="com.moneyflow.app" />
+            </intent-filter>
+
         </activity>
 
         <provider

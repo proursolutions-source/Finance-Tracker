@@ -4,7 +4,8 @@
 
 import { db } from '../db';
 import { store } from '../stores';
-import { formatBytes, getStorageEstimate, downloadBlob, requestNotificationPermission, escapeHtml } from '../utils';
+import { formatBytes, getStorageEstimate, downloadBlob, requestNotificationPermission, escapeHtml, formatRelativeDate } from '../utils';
+import { runSync, getLastSyncedAt } from '../cloud/sync';
 import { showToast } from '../components/toast';
 import { showModal, showConfirm } from '../components/modal';
 import { isPinSet, setPin, removePin, verifyPin } from '../components/lock-screen';
@@ -56,15 +57,15 @@ export async function renderSettings(): Promise<void> {
         <!-- Help -->
         <div class="glass-card p-6 mb-6">
           <h2 class="text-xl font-bold mb-4">Help</h2>
-          <div class="flex gap-3 flex-wrap">
-            <button id="replay-tour-btn" class="glass-button-secondary flex-1">Take the Tour</button>
-            <a href="/guide.html" target="_blank" class="glass-button-secondary flex-1 text-center">Feature Guide</a>
-            <a href="/faq.html" target="_blank" class="glass-button-secondary flex-1 text-center">FAQ</a>
+          <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            <button id="replay-tour-btn" class="glass-button-secondary">Take the Tour</button>
+            <a href="/guide.html" target="_blank" class="glass-button-secondary text-center">Feature Guide</a>
+            <a href="/faq.html" target="_blank" class="glass-button-secondary text-center">FAQ</a>
           </div>
           ${isCloudConfigured() ? `
-          <div class="flex gap-3 flex-wrap mt-3">
-            <a href="#/feedback" class="glass-button-secondary flex-1 text-center">Feedback &amp; Support</a>
-            <a href="#/referral" class="glass-button-secondary flex-1 text-center">Referrals</a>
+          <div class="grid grid-cols-2 gap-3 mt-3">
+            <a href="#/feedback" class="glass-button-secondary text-center">Feedback &amp; Support</a>
+            <a href="#/referral" class="glass-button-secondary text-center">Referrals</a>
           </div>
           ` : ''}
         </div>
@@ -143,6 +144,16 @@ export async function renderSettings(): Promise<void> {
         </div>
 
         ${isCloudConfigured() ? `
+        <!-- Sync -->
+        <div class="glass-card p-6 mb-6">
+          <h2 class="text-xl font-bold mb-4">Cross-Device Sync</h2>
+          <p class="text-xs text-slate-400 mb-3">Syncs accounts, categories, transactions, budgets, goals, reminders, and recurring items across your devices while signed in with the same MoneyFlow Cloud account. Investments, documents, achievements, and lending records stay local-only for now.</p>
+          <div class="flex justify-between items-center py-2">
+            <p id="last-synced-text" class="text-sm text-slate-400">Loading...</p>
+            <button id="sync-now-btn" class="glass-button-secondary text-sm px-3 py-1.5">Sync Now</button>
+          </div>
+        </div>
+
         <!-- Account -->
         <div class="glass-card p-6 mb-6">
           <h2 class="text-xl font-bold mb-4">Account</h2>
@@ -236,6 +247,32 @@ export async function renderSettings(): Promise<void> {
                 }
             );
         });
+        if (isCloudConfigured()) {
+            const lastSyncedText = document.getElementById('last-synced-text');
+            const syncNowBtn = document.getElementById('sync-now-btn') as HTMLButtonElement | null;
+            const refreshLastSyncedText = () => {
+                if (!lastSyncedText) return;
+                const last = getLastSyncedAt();
+                lastSyncedText.textContent = last ? `Last synced ${formatRelativeDate(last)}` : 'Never synced yet';
+            };
+            refreshLastSyncedText();
+            syncNowBtn?.addEventListener('click', async () => {
+                syncNowBtn.disabled = true;
+                syncNowBtn.textContent = 'Syncing...';
+                try {
+                    await runSync();
+                    showToast('Synced', { type: 'success' });
+                } catch (error) {
+                    console.error(error);
+                    showToast('Sync failed — check your connection', { type: 'error' });
+                } finally {
+                    syncNowBtn.disabled = false;
+                    syncNowBtn.textContent = 'Sync Now';
+                    refreshLastSyncedText();
+                }
+            });
+        }
+
         document.getElementById('export-csv-btn')?.addEventListener('click', exportTransactionsAsCSV);
         document.getElementById('export-json-btn')?.addEventListener('click', exportAllDataAsJSON);
         document.getElementById('reset-data-btn')?.addEventListener('click', resetAllData);

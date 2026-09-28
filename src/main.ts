@@ -13,6 +13,8 @@ import { runNotificationChecks } from './notifications';
 import { initAppLock } from './components/lock-screen';
 import { initIdleTimeout } from './components/idle-timeout';
 import { initOfflineBanner } from './components/offline-banner';
+import { initOAuthDeepLinkListener } from './components/oauth-deep-link';
+import { runSync } from './cloud/sync';
 import { getFeatureFlags } from './cloud/growth';
 import { renderMaintenancePage, renderAccountSuspendedPage } from './pages/error-page';
 import { renderNavDrawer, toggleNavDrawer, revealAdminInDrawer, NAV_ITEMS, navLinkHtml } from './components/nav-drawer';
@@ -115,6 +117,25 @@ window.addEventListener('unhandledrejection', (event) => {
 /**
  * Initialize the application
  */
+let backgroundSyncStarted = false;
+
+/**
+ * Keeps syncing after boot: periodically while the app is open, and
+ * immediately whenever it regains network connectivity or the user
+ * switches back into it (covers "I added something on my phone, then
+ * opened the already-running desktop app" without waiting a full minute).
+ */
+function initBackgroundSync(): void {
+    if (backgroundSyncStarted) return;
+    backgroundSyncStarted = true;
+
+    setInterval(() => { runSync().catch(() => { /* logged inside runSync */ }); }, 60_000);
+    window.addEventListener('online', () => runSync().catch(() => { }));
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') runSync().catch(() => { });
+    });
+}
+
 async function initApp(): Promise<void> {
   try {
     console.log('[App] Initializing MoneyFlow...');
@@ -123,6 +144,11 @@ async function initApp(): Promise<void> {
     // exactly when a dropped connection is most confusing (sign-in just
     // seems to silently fail otherwise).
     initOfflineBanner();
+
+    // Also independent of auth, and needs to be listening before the user
+    // ever taps "Continue with Google" — catches the app regaining focus
+    // after Google sign-in completes in an external Chrome Custom Tab.
+    initOAuthDeepLinkListener();
 
     // Apply theme
     const theme = getTheme();
@@ -179,6 +205,14 @@ async function initApp(): Promise<void> {
     // Initialize database
     await db.init();
     console.log('[App] Database initialized');
+
+    // Cross-device sync (accounts/categories/transactions/budgets/goals/
+    // reminders/recurrings) — awaited here so the very first paint already
+    // reflects what other devices have written, then kept going in the
+    // background (periodic + on focus/reconnect) so it doesn't have to wait
+    // for a full app restart to catch up again.
+    await runSync().catch(error => console.warn('[App] Initial sync failed:', error));
+    initBackgroundSync();
 
     // Load user profile
     let profile = await db.getProfile();

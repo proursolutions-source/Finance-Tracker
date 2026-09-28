@@ -19,7 +19,12 @@ export function isCloudConfigured(): boolean {
 
 export const supabase: SupabaseClient | null = isCloudConfigured()
     ? createClient(url as string, anonKey as string, {
-        auth: { persistSession: true, autoRefreshToken: true },
+        // PKCE (not the default 'implicit') so the OAuth redirect carries a
+        // plain `?code=` query param rather than a `#access_token=` URL
+        // fragment — fragments can get silently dropped when Android passes
+        // a custom-scheme deep link through an Intent to the app, which
+        // would otherwise break Google sign-in in the native app.
+        auth: { persistSession: true, autoRefreshToken: true, flowType: 'pkce' },
     })
     : null;
 
