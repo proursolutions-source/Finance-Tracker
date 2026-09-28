@@ -15,6 +15,7 @@ import { initIdleTimeout } from './components/idle-timeout';
 import { initOfflineBanner } from './components/offline-banner';
 import { initOAuthDeepLinkListener } from './components/oauth-deep-link';
 import { runSync } from './cloud/sync';
+import { startTour, hasTourCompleted } from './components/product-tour';
 import { getFeatureFlags } from './cloud/growth';
 import { renderMaintenancePage, renderAccountSuspendedPage } from './pages/error-page';
 import { renderNavDrawer, toggleNavDrawer, revealAdminInDrawer, NAV_ITEMS, navLinkHtml } from './components/nav-drawer';
@@ -173,14 +174,16 @@ async function initApp(): Promise<void> {
     // Maintenance mode / account suspension: both block the whole app, so
     // they're checked before anything else loads. Admins bypass maintenance
     // mode so they can still get in to turn it back off.
+    let cloudOnboardingComplete = false;
     if (isCloudConfigured()) {
-        const [flags, isAdmin, profile] = await Promise.all([
+        const [flags, isAdmin, cloudProfile] = await Promise.all([
             getFeatureFlags().catch(() => ({} as Record<string, boolean>)),
             isCurrentUserAdmin().catch(() => false),
             getMyProfile().catch(() => null),
         ]);
         setAdminCache(isAdmin);
-        if ((flags.maintenance_mode && !isAdmin) || profile?.status === 'suspended') {
+        cloudOnboardingComplete = cloudProfile?.onboardingComplete ?? false;
+        if ((flags.maintenance_mode && !isAdmin) || cloudProfile?.status === 'suspended') {
             const loadingScreen = document.getElementById('loading-screen');
             const appContainer = document.getElementById('app');
             if (loadingScreen) loadingScreen.style.display = 'none';
@@ -238,12 +241,30 @@ async function initApp(): Promise<void> {
       await db.saveProfile(profile);
     }
 
+    // The cloud account (not just this device's local profile) remembers
+    // whether onboarding was already finished — otherwise the same person
+    // opening MoneyFlow in a new browser/device has no local profile yet
+    // and would see onboarding again despite having completed it already.
+    const isFreshBrowserForExistingAccount = cloudOnboardingComplete && !profile.onboardingComplete;
+    if (isFreshBrowserForExistingAccount) {
+        profile.onboardingComplete = true;
+        await db.saveProfile(profile);
+    }
+
     store.setProfile(profile);
     primeOnboardingFromProfile(profile);
 
     // Check if onboarding is complete
-    const onboardingComplete = profile?.onboardingComplete || false;
+    const onboardingComplete = profile?.onboardingComplete || cloudOnboardingComplete;
     router.setOnboardingRequired(!onboardingComplete);
+
+    // Onboarding itself only needs to happen once per account, ever — but
+    // the guided tour is about learning this browser's UI, so an existing
+    // account skipping onboarding on an unfamiliar new browser/device still
+    // gets it, same as a brand-new account would right after onboarding.
+    if (isFreshBrowserForExistingAccount && !hasTourCompleted()) {
+        setTimeout(startTour, 800);
+    }
 
     // Load categories
     const categories = await db.getCategories();

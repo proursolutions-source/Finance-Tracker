@@ -159,6 +159,7 @@ function mapProfile(row: any): CloudProfile {
         fullName: row.full_name,
         role: row.role,
         status: row.status,
+        onboardingComplete: !!row.onboarding_complete,
         createdAt: row.created_at,
         updatedAt: row.updated_at,
     };
@@ -171,6 +172,20 @@ export async function getMyProfile(): Promise<CloudProfile | null> {
     const { data, error } = await supabase.from('profiles').select('*').eq('id', user.id).single();
     if (error) throw error;
     return mapProfile(data);
+}
+
+/**
+ * Marks onboarding complete on the *cloud* account, not just the local
+ * device profile — so opening MoneyFlow in a new browser/device with the
+ * same account never re-shows onboarding to someone who already finished
+ * it once elsewhere. A no-op when cloud isn't configured (nothing to mark).
+ */
+export async function markCloudOnboardingComplete(): Promise<void> {
+    if (!isCloudConfigured()) return;
+    const supabase = requireSupabase();
+    const user = await getCloudUser();
+    if (!user) return;
+    await supabase.from('profiles').update({ onboarding_complete: true }).eq('id', user.id);
 }
 
 /**

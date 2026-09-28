@@ -79,6 +79,7 @@ function mapProfile(row: any): CloudProfile {
         fullName: row.full_name,
         role: row.role,
         status: row.status,
+        onboardingComplete: !!row.onboarding_complete,
         createdAt: row.created_at,
         updatedAt: row.updated_at,
     };

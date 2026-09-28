@@ -9,6 +9,7 @@ export interface CloudProfile {
     fullName: string | null;
     role: 'user' | 'admin';
     status: 'active' | 'suspended';
+    onboardingComplete: boolean;
     createdAt: string;
     updatedAt: string;
 }

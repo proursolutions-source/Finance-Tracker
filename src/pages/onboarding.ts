@@ -376,6 +376,12 @@ async function completeOnboarding(): Promise<void> {
         store.setProfile(profile);
         router.setOnboardingRequired(false);
 
+        // Also mark it on the cloud account (when configured) so this
+        // doesn't get asked again in a new browser/device signed into the
+        // same account — this device's local profile is only ever seen here.
+        const { markCloudOnboardingComplete } = await import('../cloud/cloud-auth');
+        markCloudOnboardingComplete().catch(() => { /* best-effort */ });
+
         showToast('Profile created successfully! Welcome to MoneyFlow 🎉', { type: 'success', duration: 3000 });
 
         // Reset and navigate to dashboard
