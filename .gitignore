@@ -7,6 +7,11 @@
 dist/
 release/
 
+# Dependencies - never commit, always installed fresh (committing these
+# breaks clean installs on Linux/CI: Windows-committed binaries lose their
+# executable bit, causing "Permission denied" errors like Vercel's build failure)
+node_modules/
+
 # OS/editor cruft
 .DS_Store
 Thumbs.db
