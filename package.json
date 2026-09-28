@@ -11,6 +11,39 @@
         "electron:build": "vite build && electron-builder"
     },
     "main": "electron/main.cjs",
+    "build": {
+        "appId": "com.moneyflow.app",
+        "productName": "MoneyFlow",
+        "copyright": "MIT",
+        "directories": {
+            "output": "release"
+        },
+        "files": [
+            "electron/**/*",
+            "dist/**/*"
+        ],
+        "extraMetadata": {
+            "main": "electron/main.cjs"
+        },
+        "win": {
+            "target": [
+                { "target": "nsis", "arch": ["x64"] },
+                { "target": "portable", "arch": ["x64"] }
+            ],
+            "icon": "build-resources/icon.ico"
+        },
+        "nsis": {
+            "oneClick": false,
+            "allowToChangeInstallationDirectory": true,
+            "createDesktopShortcut": true,
+            "createStartMenuShortcut": true
+        },
+        "linux": {
+            "target": ["AppImage"],
+            "icon": "public/icons/icon-512x512.png",
+            "category": "Finance"
+        }
+    },
     "keywords": [
         "finance",
         "tracker",

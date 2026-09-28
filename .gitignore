@@ -5,6 +5,7 @@
 
 # Build output
 dist/
+release/
 
 # OS/editor cruft
 .DS_Store
